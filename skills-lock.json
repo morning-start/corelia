@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "gstack": {
+      "source": "garrytan/gstack",
+      "sourceType": "github",
+      "computedHash": "4869f45e6ea8d06fa2059b85f2341a01c44a34f72a497692c5ec79dbf734e346"
+    }
+  }
+}
