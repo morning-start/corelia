@@ -1,3 +1,10 @@
 {
-  "svelte.enable-ts-plugin": true
+  "svelte.enable-ts-plugin": true,
+  "files.exclude": {
+    ".codebuddy": true,
+    ".agents": true,
+    "node_modules": true
+  },
+  "rust-analyzer.linkedProjects": [],
+  "rust-analyzer.cargo.features": ["all"]
 }

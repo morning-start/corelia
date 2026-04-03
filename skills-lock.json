@@ -5,6 +5,16 @@
       "source": "garrytan/gstack",
       "sourceType": "github",
       "computedHash": "4869f45e6ea8d06fa2059b85f2341a01c44a34f72a497692c5ec79dbf734e346"
+    },
+    "project-wiki": {
+      "source": "morning-start/wiki-skills",
+      "sourceType": "github",
+      "computedHash": "de61fde92b3823fbeb8b6a94c99498cf3753abca8dbb9021e6ac90ae421f0bc3"
+    },
+    "skill-manager": {
+      "source": "morning-start/coze-skills",
+      "sourceType": "github",
+      "computedHash": "55dc097c35a54da4740ff1fca0c6126fcee9451b6be0d4df34b107db1b0d41ed"
     }
   }
 }
