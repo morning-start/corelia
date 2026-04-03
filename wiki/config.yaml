@@ -1,0 +1,44 @@
+# Corelia 项目配置
+
+project_name: "Corelia"
+username: "corelia-team"
+description: "轻量、安全、可扩展的桌面效率工具平台"
+version: "1.0.0"
+
+contact_email: "contact@corelia.com"
+author: "Corelia Team"
+
+license_type: "MIT"
+year: "2026"
+
+tech_stack:
+  - "Tauri 2.x"
+  - "Svelte 5"
+  - "SvelteKit"
+  - "Rust"
+  - "QuickJS"
+  - "WASM"
+  - "Vite"
+  - "Bun"
+
+base_url: "https://corelia.app"
+port: "1420"
+
+features:
+  - "全局快捷键唤起"
+  - "模糊搜索"
+  - "插件系统（QuickJS + Webview）"
+  - "WASM 补丁扩展"
+  - "主题定制"
+  - "云端配置同步"
+
+milestones:
+  - name: "MVP 版本"
+    date: "2026-Q2"
+    description: "完成核心功能：窗口唤起、搜索、7个QuickJS插件+1个Webview插件"
+  - name: "Beta 版本"
+    date: "2026-Q3"
+    description: "公开测试，完善插件生态"
+  - name: "正式发布"
+    date: "2026-Q4"
+    description: "v1.0 正式发布，支持 macOS"
