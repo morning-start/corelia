@@ -1,0 +1,50 @@
+:root {
+  --radius: 12px;
+  --bg-color: rgba(26, 26, 26, 0.95);
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --text-color: #f6f6f6;
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --accent-color: #646cff;
+  --accent-hover: #5058e6;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] {
+  --bg-color: rgba(255, 255, 255, 0.95);
+  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-active: rgba(0, 0, 0, 0.1);
+  --text-color: #1a1a1a;
+  --text-secondary: rgba(0, 0, 0, 0.6);
+  --accent-color: #646cff;
+  --accent-hover: #5058e6;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="system"] {
+  --bg-color: rgba(26, 26, 26, 0.95);
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --text-color: #f6f6f6;
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --accent-color: #646cff;
+  --accent-hover: #5058e6;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --bg-color: rgba(255, 255, 255, 0.95);
+    --bg-hover: rgba(0, 0, 0, 0.05);
+    --bg-active: rgba(0, 0, 0, 0.1);
+    --text-color: #1a1a1a;
+    --text-secondary: rgba(0, 0, 0, 0.6);
+    --accent-color: #646cff;
+    --accent-hover: #5058e6;
+    --border-color: rgba(0, 0, 0, 0.1);
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  }
+}
