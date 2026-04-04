@@ -1,6 +1,7 @@
 #![allow(static_mut_refs)]
 
 mod commands;
+mod error;
 
 use rquickjs::{Context, Runtime};
 use tauri_plugin_store::StoreExt;

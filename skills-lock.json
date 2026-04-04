@@ -21,6 +21,11 @@
       "sourceType": "github",
       "computedHash": "55dc097c35a54da4740ff1fca0c6126fcee9451b6be0d4df34b107db1b0d41ed"
     },
+    "software-design": {
+      "source": "morning-start/dev-skills",
+      "sourceType": "github",
+      "computedHash": "3aa0e02315e4cacd7328a1f2f7b68613473d8316dbfe4604503fcc32e6163063"
+    },
     "svelte-skills": {
       "source": "morning-start/book-skills",
       "sourceType": "github",

@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
-import { storeService } from '$lib/services/store';
+import { invoke } from '@tauri-apps/api/core';
+import { deepClone, safeGet } from '$lib/utils/helpers';
 
 export interface Settings {
   theme: 'dark' | 'light' | 'system';
@@ -16,53 +17,82 @@ export interface Settings {
   };
 }
 
-const defaultSettings: Settings = {
+const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
   shortcut: {
-    summon: 'Alt+Space',
+    summon: 'Alt+Space'
   },
   behavior: {
     autoHide: true,
-    autoHideDelay: 3000,
+    autoHideDelay: 3000
   },
   startup: {
     enabled: false,
-    minimizeToTray: true,
-  },
+    minimizeToTray: true
+  }
 };
 
 function createSettingsStore() {
-  const { subscribe, set, update } = writable<Settings>(defaultSettings);
+  const { subscribe, set, update } = writable<Settings>(DEFAULT_SETTINGS);
 
   return {
     subscribe,
-    set,
-    update,
-    async load() {
+
+    /**
+     * 从后端加载设置
+     */
+    async load(): Promise<void> {
       try {
-        const stored = await storeService.load('settings');
-        if (stored && typeof stored === 'object') {
-          const settings = { ...defaultSettings, ...stored } as Settings;
-          set(settings);
-          return settings;
+        const loaded = await invoke<Settings>('load_settings');
+        // 使用深拷贝确保响应式更新
+        set(deepClone(loaded));
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+        // 使用默认设置
+        set(deepClone(DEFAULT_SETTINGS));
+      }
+    },
+
+    /**
+     * 保存设置到后端
+     */
+    async save(settings: Settings): Promise<void> {
+      try {
+        // 使用深拷贝避免引用问题
+        const cloned = deepClone(settings);
+        await invoke('save_settings', { settings: cloned });
+      } catch (error) {
+        console.error('Failed to save settings:', error);
+        throw error;
+      }
+    },
+
+    /**
+     * 重置为默认设置
+     */
+    async reset(): Promise<void> {
+      set(deepClone(DEFAULT_SETTINGS));
+      await this.save(DEFAULT_SETTINGS);
+    },
+
+    /**
+     * 获取特定设置值
+     */
+    get<T>(path: string, defaultValue?: T): T | undefined {
+      let value: Settings | undefined;
+      subscribe(v => { value = v; })();
+      // 安全地访问嵌套属性
+      const parts = path.split('.');
+      let result: unknown = value;
+      for (const part of parts) {
+        if (result && typeof result === 'object' && part in result) {
+          result = (result as Record<string, unknown>)[part];
+        } else {
+          return defaultValue;
         }
-      } catch (e) {
-        console.error('Failed to load settings:', e);
       }
-      set(defaultSettings);
-      return defaultSettings;
-    },
-    async save(settings: Settings) {
-      try {
-        await storeService.save('settings', settings);
-        set(settings);
-      } catch (e) {
-        console.error('Failed to save settings:', e);
-      }
-    },
-    reset() {
-      set(defaultSettings);
-    },
+      return result as T;
+    }
   };
 }
 
