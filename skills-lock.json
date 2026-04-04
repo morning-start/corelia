@@ -11,10 +11,25 @@
       "sourceType": "github",
       "computedHash": "de61fde92b3823fbeb8b6a94c99498cf3753abca8dbb9021e6ac90ae421f0bc3"
     },
+    "rust-skills": {
+      "source": "morning-start/book-skills",
+      "sourceType": "github",
+      "computedHash": "4e73ca73f176b53e568a84924da6ccbaad8d5a4022e7ca0ad1da47268ffd2b3e"
+    },
     "skill-manager": {
       "source": "morning-start/coze-skills",
       "sourceType": "github",
       "computedHash": "55dc097c35a54da4740ff1fca0c6126fcee9451b6be0d4df34b107db1b0d41ed"
+    },
+    "svelte-skills": {
+      "source": "morning-start/book-skills",
+      "sourceType": "github",
+      "computedHash": "aee530cfb8b56d5d34faee8a21d24e13e03f9355d67982890a281ffbd2df89c3"
+    },
+    "tauri-skills": {
+      "source": "morning-start/book-skills",
+      "sourceType": "github",
+      "computedHash": "3f34a44f8eba168d3a340e97e09d1c2cc2b6d9bdcf0deb42c1e8646a9c134506"
     }
   }
 }
