@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { theme, type Theme } from '$lib/stores/theme';
   import { settings, type Settings } from '$lib/stores/settings';
+  import { startupService } from '$lib/services/startup';
+  import ShortcutRecorder from '$lib/components/ShortcutRecorder.svelte';
 
   interface Props {
     onClose?: () => void;
@@ -9,6 +12,15 @@
   let { onClose }: Props = $props();
 
   let currentSettings: Settings = $state($settings);
+  let startupEnabled = $state(false);
+
+  onMount(async () => {
+    try {
+      startupEnabled = await startupService.isEnabled();
+    } catch (e) {
+      console.error('Failed to load startup status:', e);
+    }
+  });
 
   function handleThemeChange(newTheme: Theme) {
     theme.set(newTheme);
@@ -24,6 +36,28 @@
     const target = event.target as HTMLInputElement;
     currentSettings.behavior.autoHide = target.checked;
     settings.save(currentSettings);
+  }
+
+  async function handleStartupChange(event: Event) {
+    const target = event.target as HTMLInputElement;
+    try {
+      if (target.checked) {
+        await startupService.enable();
+        startupEnabled = true;
+      } else {
+        await startupService.disable();
+        startupEnabled = false;
+      }
+    } catch (e) {
+      console.error('Failed to toggle startup:', e);
+      target.checked = startupEnabled;
+    }
+  }
+
+  function handleShortcutChange(shortcut: string) {
+    currentSettings.shortcut.summon = shortcut;
+    settings.save(currentSettings);
+    console.log('Shortcut changed:', shortcut);
   }
 </script>
 
@@ -42,7 +76,10 @@
       <h3>快捷键</h3>
       <div class="setting-item">
         <span class="setting-label">唤起窗口</span>
-        <button class="shortcut-btn">Alt + Space</button>
+        <ShortcutRecorder
+          value={currentSettings.shortcut.summon}
+          onChange={handleShortcutChange}
+        />
       </div>
     </section>
 
@@ -81,6 +118,14 @@
           type="checkbox"
           checked={currentSettings.behavior.autoHide}
           onchange={handleAutoHideChange}
+        />
+      </div>
+      <div class="setting-item">
+        <span class="setting-label">开机自启动</span>
+        <input
+          type="checkbox"
+          checked={startupEnabled}
+          onchange={handleStartupChange}
         />
       </div>
     </section>
@@ -159,20 +204,6 @@
   .setting-label {
     color: var(--text-color);
     font-size: 14px;
-  }
-
-  .shortcut-btn {
-    padding: 6px 12px;
-    background: var(--bg-hover);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    color: var(--text-color);
-    font-size: 13px;
-    cursor: pointer;
-  }
-
-  .shortcut-btn:hover {
-    background: var(--bg-active);
   }
 
   .theme-options {

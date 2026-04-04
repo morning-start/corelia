@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { invoke } from '@tauri-apps/api/core';
+import { storeService } from '$lib/services/store';
 
 export interface Settings {
   theme: 'dark' | 'light' | 'system';
@@ -40,16 +40,21 @@ function createSettingsStore() {
     update,
     async load() {
       try {
-        const settings = await invoke<Settings>('load_settings');
-        set(settings);
+        const stored = await storeService.load('settings');
+        if (stored && typeof stored === 'object') {
+          const settings = { ...defaultSettings, ...stored } as Settings;
+          set(settings);
+          return settings;
+        }
       } catch (e) {
         console.error('Failed to load settings:', e);
-        set(defaultSettings);
       }
+      set(defaultSettings);
+      return defaultSettings;
     },
     async save(settings: Settings) {
       try {
-        await invoke('save_settings', { settings });
+        await storeService.save('settings', settings);
         set(settings);
       } catch (e) {
         console.error('Failed to save settings:', e);
