@@ -1,58 +1,23 @@
-use std::process::Command;
+//! Shell 操作命令
+//! 
+//! 提供 Tauri Command 接口，调用 ShellService 执行操作
 
+use crate::services::ShellService;
+
+/// 打开 URL（默认浏览器）
 #[tauri::command]
 pub fn open_url(url: String) -> Result<(), String> {
-    open::that(&url).map_err(|e| e.to_string())
+    ShellService::open_url(url)
 }
 
+/// 打开文件路径（资源管理器）
 #[tauri::command]
 pub fn open_path(path: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        Command::new("explorer")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    ShellService::open_path(path)
 }
 
+/// 打开应用程序
 #[tauri::command]
 pub fn open_app(app: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        Command::new("cmd")
-            .args(["/c", "start", "", &app])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg("-a")
-            .arg(&app)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        Command::new(&app)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    ShellService::open_app(app)
 }

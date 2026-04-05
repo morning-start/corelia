@@ -1,30 +1,17 @@
+//! 全局快捷键管理命令
+//! 
+//! 提供全局快捷键的注册和管理功能
+
 use tauri::AppHandle;
-use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
+use crate::services::WindowService;
 
+/// 当前快捷键（全局状态）
 static CURRENT_SHORTCUT: Lazy<Mutex<Option<String>>> = Lazy::new(|| Mutex::new(None));
 
-/// 统一的窗口切换逻辑（使用全局状态）
-fn toggle_window_with_state(app: &AppHandle, visible: bool) {
-    if let Some(window) = app.get_webview_window("main") {
-        if visible {
-            let _ = window.hide();
-        } else {
-            let _ = window.set_always_on_top(true);
-            let _ = window.show();
-            let _ = window.set_focus();
-            // 延迟取消置顶
-            let window_clone = window.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                let _ = window_clone.set_always_on_top(false);
-            });
-        }
-    }
-}
-
+/// 解析快捷键字符串为 Shortcut 对象
 fn parse_shortcut(shortcut_str: &str) -> Result<Shortcut, String> {
     let parts: Vec<&str> = shortcut_str.split('+').collect();
     if parts.is_empty() {
@@ -53,7 +40,6 @@ fn parse_shortcut(shortcut_str: &str) -> Result<Shortcut, String> {
                 modifiers = Some(modifiers.unwrap_or(Modifiers::empty()) | Modifiers::SUPER);
             }
             _ => {
-                // Parse key
                 let code = match part.to_uppercase().as_str() {
                     "SPACE" => tauri_plugin_global_shortcut::Code::Space,
                     "A" => tauri_plugin_global_shortcut::Code::KeyA,
@@ -118,9 +104,9 @@ fn parse_shortcut(shortcut_str: &str) -> Result<Shortcut, String> {
     }
 }
 
+/// 注册默认快捷键（Alt+Space）
 #[tauri::command]
 pub fn register_shortcut_cmd(app: AppHandle) -> Result<(), String> {
-    // 注册默认快捷键 Alt+Space
     let default_shortcut = Shortcut::new(
         Some(tauri_plugin_global_shortcut::Modifiers::ALT),
         tauri_plugin_global_shortcut::Code::Space,
@@ -128,19 +114,17 @@ pub fn register_shortcut_cmd(app: AppHandle) -> Result<(), String> {
 
     app.global_shortcut().on_shortcut(default_shortcut, move |app, _shortcut, event| {
         if event.state == ShortcutState::Pressed {
-            // 使用统一的窗口切换逻辑
-            let window = app.get_webview_window("main").unwrap();
-            let is_visible = window.is_visible().unwrap_or(false);
-            toggle_window_with_state(app, is_visible);
+            let _ = WindowService::toggle(app);
         }
     }).map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
+/// 注册自定义快捷键
 #[tauri::command]
 pub fn register_custom_shortcut(app: AppHandle, shortcut: String) -> Result<(), String> {
-    // 先注销所有快捷键
+    // 注销所有快捷键
     let _ = app.global_shortcut().unregister_all();
 
     // 解析并注册新快捷键
@@ -153,21 +137,20 @@ pub fn register_custom_shortcut(app: AppHandle, shortcut: String) -> Result<(), 
 
     app.global_shortcut().on_shortcut(parsed_shortcut, move |app, _shortcut, event| {
         if event.state == ShortcutState::Pressed {
-            // 使用统一的窗口切换逻辑
-            let window = app.get_webview_window("main").unwrap();
-            let is_visible = window.is_visible().unwrap_or(false);
-            toggle_window_with_state(app, is_visible);
+            let _ = WindowService::toggle(app);
         }
     }).map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
+/// 注销所有快捷键
 #[tauri::command]
 pub fn unregister_all_shortcuts(app: AppHandle) -> Result<(), String> {
     app.global_shortcut().unregister_all().map_err(|e| e.to_string())
 }
 
+/// 获取当前快捷键
 #[tauri::command]
 pub fn get_current_shortcut() -> Result<Option<String>, String> {
     let current = CURRENT_SHORTCUT.lock().map_err(|e| e.to_string())?;

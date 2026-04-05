@@ -3,7 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { theme } from '$lib/stores/theme';
-  import { settings } from '$lib/stores/settings';
+  import { settings, type Settings } from '$lib/stores/settings';
   import { searchHistory } from '$lib/stores/history';
   import { searchStore } from '$lib/stores/search';
   import SearchBox from '$lib/components/SearchBox.svelte';
@@ -21,15 +21,29 @@
   let resultsValue = $state<any[]>([]);
   let historyItems = $state<string[]>([]);
   let selectedCategory = $state<'all' | 'system' | 'plugin' | 'history'>('all');
+  let currentSettings: Settings = $state<Settings>({
+    theme: 'dark',
+    shortcut: { summon: 'Alt+Space' },
+    behavior: { autoHide: true, autoHideDelay: 3000 },
+    startup: { enabled: false, minimizeToTray: true }
+  });
 
   let unsubQuery: (() => void) | undefined;
   let unsubResults: (() => void) | undefined;
   let unsubHistory: (() => void) | undefined;
+  let unsubSettings: (() => void) | undefined;
 
   onMount(() => {
     settings.load().then(() => {
-      theme.set($settings.theme);
+      const loaded = settings.get('theme');
+      if (loaded) theme.set(loaded as any);
     });
+    
+    // 订阅 settings 变化
+    unsubSettings = settings.subscribe((s) => {
+      currentSettings = s;
+    });
+    
     searchHistory.init();
 
     unsubQuery = searchStore.query.subscribe(v => queryValue = v);
@@ -49,9 +63,10 @@
     // 监听窗口焦点变化，实现失焦自动隐藏
     const unlistenFocus = appWindow.onFocusChanged(async ({ payload: focused }) => {
       console.log('窗口焦点变化:', focused);
-      if (!focused && $settings.behavior.autoHide) {
+      if (!focused && currentSettings.behavior.autoHide) {
         console.log('窗口失焦，自动隐藏');
-        await appWindow.hide();
+        // 调用后端命令以同步全局状态
+        await invoke('hide_window');
       }
     });
 
@@ -59,6 +74,7 @@
       unsubQuery?.();
       unsubResults?.();
       unsubHistory?.();
+      unsubSettings?.();
       // 取消监听
       unlistenFocus.then(unlisten => unlisten());
     };
@@ -69,7 +85,8 @@
       if (showSettings) {
         showSettings = false;
       } else {
-        appWindow.hide();
+        // 调用后端命令以同步全局状态
+        invoke('hide_window').catch(console.error);
       }
     }
     if (event.key === 'ArrowDown') {

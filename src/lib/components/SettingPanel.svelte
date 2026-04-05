@@ -3,6 +3,7 @@
   import { theme, type Theme } from '$lib/stores/theme';
   import { settings, type Settings } from '$lib/stores/settings';
   import { startupService } from '$lib/services/startup';
+  import { shortcutService } from '$lib/services/shortcut';
   import ShortcutRecorder from '$lib/components/ShortcutRecorder.svelte';
 
   interface Props {
@@ -54,10 +55,19 @@
     }
   }
 
-  function handleShortcutChange(shortcut: string) {
-    currentSettings.shortcut.summon = shortcut;
-    settings.save(currentSettings);
-    console.log('Shortcut changed:', shortcut);
+  async function handleShortcutChange(shortcut: string) {
+    try {
+      if (shortcut) {
+        await shortcutService.register(shortcut);
+      } else {
+        await shortcutService.unregisterAll();
+      }
+      currentSettings.shortcut.summon = shortcut;
+      await settings.save(currentSettings);
+    } catch (e) {
+      console.error('Failed to register shortcut:', e);
+      alert('快捷键注册失败，请重试');
+    }
   }
 </script>
 
