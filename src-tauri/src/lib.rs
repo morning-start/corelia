@@ -4,6 +4,13 @@ mod commands;
 mod error;
 mod services;
 
+// 导入配置命令到当前作用域
+use commands::config::{
+    load_system_config, save_system_config,
+    load_user_config, save_user_config, reset_user_config,
+    load_app_config, save_app_config, clear_app_config,
+};
+
 use rquickjs::{Context, Runtime};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri::{
@@ -71,6 +78,16 @@ pub fn run() {
             let rgba = img.into_raw();
             let icon_image = Image::new(rgba.as_slice(), width, height);
 
+            // 初始化配置目录 (首次启动时创建配置文件)
+            match services::ConfigService::init_config_directory(&app.handle()) {
+                Ok(config_dir) => {
+                    println!("配置目录：{:?}", config_dir);
+                }
+                Err(e) => {
+                    eprintln!("初始化配置目录失败：{}", e);
+                }
+            }
+
             // 初始化窗口状态
             WindowService::init_state(&app.handle())?;
 
@@ -119,12 +136,19 @@ pub fn run() {
             commands::shell::open_url,
             commands::shell::open_path,
             commands::shell::open_app,
-            // 数据存储
+            // 配置管理 (分层配置)
+            load_system_config,
+            save_system_config,
+            load_user_config,
+            save_user_config,
+            reset_user_config,
+            load_app_config,
+            save_app_config,
+            clear_app_config,
+            // 数据存储 (兼容旧 API)
             commands::store::save_to_store,
             commands::store::load_from_store,
             commands::store::delete_from_store,
-            commands::store::load_settings,
-            commands::store::save_settings,
             // 自启动
             commands::autostart::enable_autostart,
             commands::autostart::disable_autostart,

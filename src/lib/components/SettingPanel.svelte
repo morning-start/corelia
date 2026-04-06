@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { theme, type Theme } from '$lib/stores/theme';
-  import { settings, type Settings } from '$lib/stores/settings';
+  import { system, type SystemConfig } from '$lib/stores/system';
+  import { user, type UserConfig } from '$lib/stores/user';
   import { startupService } from '$lib/services/startup';
   import { shortcutService } from '$lib/services/shortcut';
   import ShortcutRecorder from '$lib/components/ShortcutRecorder.svelte';
@@ -12,10 +13,17 @@
 
   let { onClose }: Props = $props();
 
-  let currentSettings: Settings = $state($settings);
+  let systemConfig: SystemConfig = $state($system);
+  let userConfig: UserConfig = $state($user);
   let startupEnabled = $state(false);
 
   onMount(async () => {
+    // 加载配置
+    await Promise.all([
+      system.load(),
+      user.load()
+    ]);
+    
     try {
       startupEnabled = await startupService.isEnabled();
     } catch (e) {
@@ -25,8 +33,7 @@
 
   function handleThemeChange(newTheme: Theme) {
     theme.set(newTheme);
-    currentSettings.theme = newTheme;
-    settings.save(currentSettings);
+    user.update('theme', newTheme);
   }
 
   function handleClose() {
@@ -35,8 +42,7 @@
 
   function handleAutoHideChange(event: Event) {
     const target = event.target as HTMLInputElement;
-    currentSettings.behavior.autoHide = target.checked;
-    settings.save(currentSettings);
+    user.update('behavior.autoHide', target.checked);
   }
 
   async function handleStartupChange(event: Event) {
@@ -45,9 +51,13 @@
       if (target.checked) {
         await startupService.enable();
         startupEnabled = true;
+        systemConfig.startup.enabled = true;
+        await system.save(systemConfig);
       } else {
         await startupService.disable();
         startupEnabled = false;
+        systemConfig.startup.enabled = false;
+        await system.save(systemConfig);
       }
     } catch (e) {
       console.error('Failed to toggle startup:', e);
@@ -62,8 +72,15 @@
       } else {
         await shortcutService.unregisterAll();
       }
-      currentSettings.shortcut.summon = shortcut;
-      await settings.save(currentSettings);
+      systemConfig.shortcut.summon = shortcut;
+      // 系统级配置修改需确认
+      const confirmed = confirm('修改快捷键配置，确定继续？');
+      if (confirmed) {
+        await system.save(systemConfig);
+      } else {
+        // 取消则恢复原配置
+        await system.load();
+      }
     } catch (e) {
       console.error('Failed to register shortcut:', e);
       alert('快捷键注册失败，请重试');

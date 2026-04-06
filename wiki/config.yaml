@@ -27,9 +27,10 @@ port: "1420"
 features:
   - "全局快捷键唤起"
   - "模糊搜索"
-  - "插件系统（QuickJS + Webview）"
+  - "插件系统 (QuickJS + Webview)"
   - "WASM 补丁扩展"
   - "主题定制"
+  - "系统配置管理"
   - "云端配置同步"
 
 milestones:

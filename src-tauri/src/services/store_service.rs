@@ -32,7 +32,13 @@ impl StoreService {
         store.save().map_err(|e| e.to_string())
     }
     
+    // ==================== 已弃用的 API ====================
+    // 注意：以下函数已被新的分层配置系统替代
+    // 为保持向后兼容性暂时保留，未来版本可能删除
+    
     /// 加载设置（带默认值）
+    /// @deprecated 使用 ConfigService::load_system / load_user 替代
+    #[allow(dead_code)]
     pub fn load_settings(app: &tauri::AppHandle) -> Result<Value, String> {
         let store = app.store("corelia.json").map_err(|e| e.to_string())?;
         match store.get("settings") {
@@ -47,6 +53,8 @@ impl StoreService {
     }
     
     /// 保存设置
+    /// @deprecated 使用 ConfigService::save_system / save_user 替代
+    #[allow(dead_code)]
     pub fn save_settings(app: &tauri::AppHandle, settings: Value) -> Result<(), String> {
         let store = app.store("corelia.json").map_err(|e| e.to_string())?;
         store.set("settings", settings);
