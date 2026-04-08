@@ -1,9 +1,9 @@
 /**
  * Corelia 前端库统一导出
- * 
+ *
  * 使用示例：
  * ```typescript
- * import { storeService, searchHistory, settings } from '$lib';
+ * import { storeService, searchHistory, system, user } from '$lib';
  * ```
  */
 
@@ -18,8 +18,11 @@ export type { StartupService } from './services/startup';
 export { searchHistory } from './stores/history';
 export type { HistoryItem } from './stores/history';
 
-export { settings } from './stores/settings';
-export type { Settings } from './stores/settings';
+export { system } from './stores/system';
+export type { SystemConfig } from './stores/system';
+
+export { user } from './stores/user';
+export type { UserConfig } from './stores/user';
 
 export { theme } from './stores/theme';
 export type { Theme } from './stores/theme';

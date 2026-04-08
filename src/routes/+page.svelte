@@ -3,7 +3,8 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { theme } from '$lib/stores/theme';
-  import { settings, type Settings } from '$lib/stores/settings';
+  import { system } from '$lib/stores/system';
+  import { user } from '$lib/stores/user';
   import { searchHistory } from '$lib/stores/history';
   import { searchStore } from '$lib/stores/search';
   import SearchBox from '$lib/components/SearchBox.svelte';
@@ -28,37 +29,41 @@
   let historyItems = $state<string[]>([]);
   /** 当前选中的分类 */
   let selectedCategory = $state<'all' | 'system' | 'plugin' | 'history'>('all');
-  /** 当前设置状态 */
-  let currentSettings: Settings = $state<Settings>({
-    theme: 'dark',
-    shortcut: { summon: 'Alt+Space' },
-    behavior: { autoHide: true, autoHideDelay: 3000 },
-    startup: { enabled: false, minimizeToTray: true }
-  });
+
+  /** 本地状态：用于 UI 绑定的配置快照 */
+  let systemConfigSnapshot = $state({ summon: 'Alt+Space', enabled: false, minimizeToTray: true });
+  let userConfigSnapshot = $state({ autoHide: true, autoHideDelay: 3000 });
 
   /** 取消订阅函数列表 */
   let unsubQuery: (() => void) | undefined;
   let unsubResults: (() => void) | undefined;
   let unsubHistory: (() => void) | undefined;
-  let unsubSettings: (() => void) | undefined;
+  let unsubSystem: (() => void) | undefined;
+  let unsubUser: (() => void) | undefined;
 
   /**
    * 组件挂载时初始化
-   * - 加载设置
+   * - 加载系统配置和用户配置
    * - 初始化搜索历史
    * - 注册全局快捷键
    * - 监听窗口焦点变化
    */
   onMount(() => {
-    // 加载设置
-    settings.load().then(() => {
-      const loaded = settings.get('theme');
-      if (loaded) theme.set(loaded as any);
+    // 加载系统配置和用户配置
+    Promise.all([
+      system.load(),
+      user.load()
+    ]).then(() => {
+      const loadedTheme = user.get('theme');
+      if (loadedTheme) theme.set(loadedTheme as 'dark' | 'light' | 'system');
     });
 
-    // 订阅设置变化
-    unsubSettings = settings.subscribe((s) => {
-      currentSettings = s;
+    // 订阅配置变化
+    unsubSystem = system.subscribe((s) => {
+      systemConfigSnapshot = { ...s.shortcut, ...s.startup };
+    });
+    unsubUser = user.subscribe((s) => {
+      userConfigSnapshot = { ...s.behavior };
     });
 
     // 初始化搜索历史
@@ -83,7 +88,7 @@
     // 监听窗口焦点变化，实现失焦自动隐藏
     const unlistenFocus = appWindow.onFocusChanged(async ({ payload: focused }) => {
       console.log('窗口焦点变化:', focused);
-      if (!focused && currentSettings.behavior.autoHide) {
+      if (!focused && userConfigSnapshot.autoHide) {
         console.log('窗口失焦，自动隐藏');
         await invoke('hide_window');
       }
@@ -94,7 +99,8 @@
       unsubQuery?.();
       unsubResults?.();
       unsubHistory?.();
-      unsubSettings?.();
+      unsubSystem?.();
+      unsubUser?.();
       unlistenFocus.then(unlisten => unlisten());
     };
   });

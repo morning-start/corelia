@@ -180,11 +180,6 @@
     overflow: hidden;
   }
 
-  .result-name {
-    color: var(--text-color);
-    font-size: 14px;
-    font-weight: 500;
-  }
 
   .result-desc {
     color: var(--text-secondary);

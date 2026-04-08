@@ -1,6 +1,5 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
-import { deepClone } from '$lib/utils/helpers';
 
 export interface AppConfig {
   searchHistory: Array<{
@@ -55,10 +54,10 @@ function createAppStore() {
     async load(): Promise<void> {
       try {
         const config = await invoke<AppConfig>('load_app_config');
-        set(deepClone(config));
+        set({ ...config });
       } catch (error) {
         console.error('Failed to load app config:', error);
-        set(deepClone(DEFAULT_APP_CONFIG));
+        set({ ...DEFAULT_APP_CONFIG });
       }
     },
 
@@ -67,8 +66,7 @@ function createAppStore() {
      */
     async save(config: AppConfig): Promise<void> {
       try {
-        const cloned = deepClone(config);
-        await invoke('save_app_config', { config: cloned });
+        await invoke('save_app_config', { config: { ...config } });
       } catch (error) {
         console.error('Failed to save app config:', error);
         throw error;
@@ -79,7 +77,7 @@ function createAppStore() {
      * 清理应用配置
      */
     async clear(): Promise<void> {
-      set(deepClone(DEFAULT_APP_CONFIG));
+      set({ ...DEFAULT_APP_CONFIG });
       try {
         await invoke('clear_app_config');
       } catch (error) {
@@ -92,28 +90,27 @@ function createAppStore() {
      * 添加搜索历史
      */
     async addHistory(query: string): Promise<void> {
-      let config: AppConfig;
-      subscribe(c => { config = c; })();
-      
+      const currentConfig = get({ subscribe });
+
       // 查找是否已存在
-      const existing = config.searchHistory.find(h => h.query === query);
+      const existing = currentConfig.searchHistory.find(h => h.query === query);
       if (existing) {
         existing.count++;
         existing.timestamp = Date.now();
       } else {
-        config.searchHistory.unshift({
+        currentConfig.searchHistory.unshift({
           query,
           timestamp: Date.now(),
           count: 1
         });
         // 限制历史记录数量
-        if (config.searchHistory.length > 100) {
-          config.searchHistory = config.searchHistory.slice(0, 100);
+        if (currentConfig.searchHistory.length > 100) {
+          currentConfig.searchHistory = currentConfig.searchHistory.slice(0, 100);
         }
       }
-      
-      set(config);
-      await this.save(config);
+
+      set(currentConfig);
+      await this.save(currentConfig);
     },
 
     /**
@@ -123,16 +120,15 @@ function createAppStore() {
       version: string;
       loadTime: number;
     }): Promise<void> {
-      let config: AppConfig;
-      subscribe(c => { config = c; })();
-      
-      config.plugins.cache[pluginId] = {
+      const currentConfig = get({ subscribe });
+
+      currentConfig.plugins.cache[pluginId] = {
         ...data,
         lastUsed: Date.now()
       };
-      
-      set(config);
-      await this.save(config);
+
+      set(currentConfig);
+      await this.save(currentConfig);
     }
   };
 }

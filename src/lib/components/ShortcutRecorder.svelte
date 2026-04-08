@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+
   /** 快捷键录制组件属性接口 */
   interface Props {
     /** 当前快捷键值 */
@@ -14,58 +16,82 @@
   /** 录制的按键列表 */
   let recordedKeys = $state<string[]>([]);
 
-  /**
-   * 处理键盘按下事件
-   * @param event - 键盘事件对象
-   */
-  function handleKeyDown(event: KeyboardEvent) {
-    if (!isRecording) return;
+  /** 键盘事件处理函数引用 */
+  let handleKeyDown: ((event: KeyboardEvent) => void) | undefined;
+  let handleKeyUp: ((event: KeyboardEvent) => void) | undefined;
 
-    event.preventDefault();
-    event.stopPropagation();
+  /** 组件挂载时设置全局键盘事件监听 */
+  onMount(() => {
+    // 定义键盘按下处理
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isRecording) return;
 
-    const keys: string[] = [];
+      event.preventDefault();
+      event.stopPropagation();
 
-    if (event.ctrlKey) keys.push('Ctrl');
-    if (event.altKey) keys.push('Alt');
-    if (event.shiftKey) keys.push('Shift');
-    if (event.metaKey) keys.push('Meta');
+      const keys: string[] = [];
 
-    const key = event.key;
-    if (key !== 'Control' && key !== 'Alt' && key !== 'Shift' && key !== 'Meta') {
-      const displayKey = key.length === 1 ? key.toUpperCase() : key;
-      keys.push(displayKey);
-    }
+      if (event.ctrlKey) keys.push('Ctrl');
+      if (event.altKey) keys.push('Alt');
+      if (event.shiftKey) keys.push('Shift');
+      if (event.metaKey) keys.push('Meta');
 
-    if (keys.length > 0) {
-      recordedKeys = keys;
-    }
-  }
+      const key = event.key;
+      if (key !== 'Control' && key !== 'Alt' && key !== 'Shift' && key !== 'Meta') {
+        const displayKey = key.length === 1 ? key.toUpperCase() : key;
+        keys.push(displayKey);
+      }
 
-  /**
-   * 处理键盘释放事件
-   * @param event - 键盘事件对象
-   */
-  function handleKeyUp(event: KeyboardEvent) {
-    if (!isRecording) return;
+      if (keys.length > 0) {
+        recordedKeys = keys;
+      }
+    };
 
-    if (recordedKeys.length > 0) {
-      const shortcut = recordedKeys.join('+');
-      isRecording = false;
-      onChange?.(shortcut);
-    }
-  }
+    // 定义键盘释放处理
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (!isRecording) return;
+
+      if (recordedKeys.length > 0) {
+        const shortcut = recordedKeys.join('+');
+        stopRecording();
+        onChange?.(shortcut);
+      }
+    };
+
+    // 保存引用以便移除监听
+    handleKeyDown = onKeyDown;
+    handleKeyUp = onKeyUp;
+
+    // 组件卸载时清理
+    return () => {
+      if (handleKeyDown) {
+        window.removeEventListener('keydown', handleKeyDown);
+      }
+      if (handleKeyUp) {
+        window.removeEventListener('keyup', handleKeyUp);
+      }
+    };
+  });
 
   /** 开始录制快捷键 */
   function startRecording() {
     isRecording = true;
     recordedKeys = [];
+    window.addEventListener('keydown', handleKeyDown!);
+    window.addEventListener('keyup', handleKeyUp!);
+  }
+
+  /** 停止录制 */
+  function stopRecording() {
+    isRecording = false;
+    window.removeEventListener('keydown', handleKeyDown!);
+    window.removeEventListener('keyup', handleKeyUp!);
   }
 
   /** 处理失去焦点事件 */
   function handleBlur() {
     if (isRecording) {
-      isRecording = false;
+      stopRecording();
       recordedKeys = [];
     }
   }
@@ -84,8 +110,6 @@
     class:recording={isRecording}
     onclick={handleClick}
     onblur={handleBlur}
-    onkeydown={handleKeyDown}
-    onkeyup={handleKeyUp}
   >
     {#if isRecording}
       <span class="recording-text">按下快捷键...</span>
