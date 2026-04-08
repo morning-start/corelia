@@ -104,7 +104,7 @@
       <div class="setting-item">
         <span class="setting-label">唤起窗口</span>
         <ShortcutRecorder
-          value={currentSettings.shortcut.summon}
+          value={systemConfig.shortcut.summon}
           onChange={handleShortcutChange}
         />
       </div>
@@ -143,7 +143,7 @@
         <span class="setting-label">失焦自动隐藏</span>
         <input
           type="checkbox"
-          checked={currentSettings.behavior.autoHide}
+          checked={userConfig.behavior.autoHide}
           onchange={handleAutoHideChange}
         />
       </div>
