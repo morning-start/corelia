@@ -1,13 +1,18 @@
 <script lang="ts">
+  /** 搜索分类类型 */
   type Category = 'all' | 'system' | 'plugin' | 'history';
 
+  /** 分类标签组件属性接口 */
   interface Props {
+    /** 当前选中的分类 */
     selected?: Category;
+    /** 分类切换回调 */
     onSelect?: (category: Category) => void;
   }
 
   let { selected = $bindable('all' as Category), onSelect }: Props = $props();
 
+  /** 分类配置列表 */
   const categories: { id: Category; label: string; icon: string }[] = [
     { id: 'all', label: '全部', icon: 'M4 6h16M4 12h16M4 18h16' },
     { id: 'system', label: '系统', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 4v4l3 3' },
@@ -15,6 +20,10 @@
     { id: 'history', label: '历史', icon: 'M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' }
   ];
 
+  /**
+   * 切换分类
+   * @param cat - 要选中的分类
+   */
   function selectCategory(cat: Category) {
     selected = cat;
     onSelect?.(cat);

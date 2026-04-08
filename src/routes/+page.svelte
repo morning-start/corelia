@@ -13,14 +13,22 @@
   import CategoryTabs from '$lib/components/CategoryTabs.svelte';
   import '$lib/styles/themes.css';
 
+  /** Tauri 主窗口实例 */
   const appWindow = getCurrentWindow();
 
+  /** 是否显示设置面板 */
   let showSettings = $state(false);
+  /** 当前选中的结果索引 */
   let selectedIndex = $state(-1);
+  /** 搜索查询词 */
   let queryValue = $state('');
+  /** 搜索结果列表 */
   let resultsValue = $state<any[]>([]);
+  /** 搜索历史列表 */
   let historyItems = $state<string[]>([]);
+  /** 当前选中的分类 */
   let selectedCategory = $state<'all' | 'system' | 'plugin' | 'history'>('all');
+  /** 当前设置状态 */
   let currentSettings: Settings = $state<Settings>({
     theme: 'dark',
     shortcut: { summon: 'Alt+Space' },
@@ -28,24 +36,35 @@
     startup: { enabled: false, minimizeToTray: true }
   });
 
+  /** 取消订阅函数列表 */
   let unsubQuery: (() => void) | undefined;
   let unsubResults: (() => void) | undefined;
   let unsubHistory: (() => void) | undefined;
   let unsubSettings: (() => void) | undefined;
 
+  /**
+   * 组件挂载时初始化
+   * - 加载设置
+   * - 初始化搜索历史
+   * - 注册全局快捷键
+   * - 监听窗口焦点变化
+   */
   onMount(() => {
+    // 加载设置
     settings.load().then(() => {
       const loaded = settings.get('theme');
       if (loaded) theme.set(loaded as any);
     });
-    
-    // 订阅 settings 变化
+
+    // 订阅设置变化
     unsubSettings = settings.subscribe((s) => {
       currentSettings = s;
     });
-    
+
+    // 初始化搜索历史
     searchHistory.init();
 
+    // 订阅搜索查询和结果
     unsubQuery = searchStore.query.subscribe(v => queryValue = v);
     unsubResults = searchStore.results.subscribe(v => {
       resultsValue = selectedCategory === 'all' ? v : v.filter((r: any) => r.original.category === selectedCategory);
@@ -54,6 +73,7 @@
       historyItems = state.items.slice(0, 5).map(item => item.query);
     });
 
+    // 注册全局快捷键
     invoke("register_shortcut_cmd").then(() => {
       console.log("全局快捷键注册成功");
     }).catch((e) => {
@@ -65,27 +85,31 @@
       console.log('窗口焦点变化:', focused);
       if (!focused && currentSettings.behavior.autoHide) {
         console.log('窗口失焦，自动隐藏');
-        // 调用后端命令以同步全局状态
         await invoke('hide_window');
       }
     });
 
+    // 清理函数
     return () => {
       unsubQuery?.();
       unsubResults?.();
       unsubHistory?.();
       unsubSettings?.();
-      // 取消监听
       unlistenFocus.then(unlisten => unlisten());
     };
   });
 
+  /**
+   * 处理键盘事件
+   * - Escape: 关闭设置面板或隐藏窗口
+   * - ArrowUp/Down: 选择上/下一个结果
+   * - Enter: 确认选择
+   */
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       if (showSettings) {
         showSettings = false;
       } else {
-        // 调用后端命令以同步全局状态
         invoke('hide_window').catch(console.error);
       }
     }
@@ -109,6 +133,9 @@
     }
   }
 
+  /**
+   * 处理搜索输入
+   */
   function handleSearchInput(query: string) {
     searchStore.setQuery(query);
     selectedIndex = -1;
@@ -117,6 +144,9 @@
     }
   }
 
+  /**
+   * 处理选择结果项
+   */
   function handleSelectItem(item: any, index: number) {
     console.log('Selected item:', item);
     if (item.action) {
@@ -124,10 +154,16 @@
     }
   }
 
+  /**
+   * 处理历史记录选择
+   */
   function handleHistorySelect(query: string) {
     searchStore.setQuery(query);
   }
 
+  /**
+   * 处理分类切换
+   */
   function handleCategoryChange(category: 'all' | 'system' | 'plugin' | 'history') {
     selectedCategory = category;
     searchStore.results.subscribe(v => {

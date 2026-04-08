@@ -8,22 +8,27 @@
   import ShortcutRecorder from '$lib/components/ShortcutRecorder.svelte';
 
   interface Props {
+    /** 关闭面板回调函数 */
     onClose?: () => void;
   }
 
   let { onClose }: Props = $props();
 
+  /** 系统级配置状态（快捷键、开机启动等） */
   let systemConfig: SystemConfig = $state($system);
+  /** 用户级配置状态（主题、行为等） */
   let userConfig: UserConfig = $state($user);
+  /** 开机自启动启用状态 */
   let startupEnabled = $state(false);
 
   onMount(async () => {
-    // 加载配置
+    // 加载系统配置和用户配置
     await Promise.all([
       system.load(),
       user.load()
     ]);
-    
+
+    // 获取开机自启动状态
     try {
       startupEnabled = await startupService.isEnabled();
     } catch (e) {
@@ -31,20 +36,24 @@
     }
   });
 
+  /** 主题变更处理 */
   function handleThemeChange(newTheme: Theme) {
     theme.set(newTheme);
     user.update('theme', newTheme);
   }
 
+  /** 关闭设置面板 */
   function handleClose() {
     onClose?.();
   }
 
+  /** 失焦自动隐藏开关变更处理 */
   function handleAutoHideChange(event: Event) {
     const target = event.target as HTMLInputElement;
     user.update('behavior.autoHide', target.checked);
   }
 
+  /** 开机自启动开关变更处理 */
   async function handleStartupChange(event: Event) {
     const target = event.target as HTMLInputElement;
     try {
@@ -65,6 +74,7 @@
     }
   }
 
+  /** 快捷键变更处理 */
   async function handleShortcutChange(shortcut: string) {
     try {
       if (shortcut) {
@@ -73,7 +83,7 @@
         await shortcutService.unregisterAll();
       }
       systemConfig.shortcut.summon = shortcut;
-      // 系统级配置修改需确认
+      // 系统级配置修改需用户确认
       const confirmed = confirm('修改快捷键配置，确定继续？');
       if (confirmed) {
         await system.save(systemConfig);

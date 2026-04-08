@@ -1,14 +1,23 @@
 <script lang="ts">
+  /** 快捷键录制组件属性接口 */
   interface Props {
+    /** 当前快捷键值 */
     value?: string;
+    /** 快捷键变更回调 */
     onChange?: (shortcut: string) => void;
   }
 
   let { value = '', onChange }: Props = $props();
 
+  /** 是否正在录制 */
   let isRecording = $state(false);
+  /** 录制的按键列表 */
   let recordedKeys = $state<string[]>([]);
 
+  /**
+   * 处理键盘按下事件
+   * @param event - 键盘事件对象
+   */
   function handleKeyDown(event: KeyboardEvent) {
     if (!isRecording) return;
 
@@ -33,6 +42,10 @@
     }
   }
 
+  /**
+   * 处理键盘释放事件
+   * @param event - 键盘事件对象
+   */
   function handleKeyUp(event: KeyboardEvent) {
     if (!isRecording) return;
 
@@ -43,11 +56,13 @@
     }
   }
 
+  /** 开始录制快捷键 */
   function startRecording() {
     isRecording = true;
     recordedKeys = [];
   }
 
+  /** 处理失去焦点事件 */
   function handleBlur() {
     if (isRecording) {
       isRecording = false;
@@ -55,6 +70,7 @@
     }
   }
 
+  /** 处理点击事件 */
   function handleClick() {
     if (!isRecording) {
       startRecording();

@@ -1,11 +1,20 @@
 <script lang="ts">
+  /** 高亮文本组件属性接口 */
   interface Props {
+    /** 原始文本 */
     text: string;
+    /** 高亮查询词 */
     query: string;
   }
 
   let { text, query }: Props = $props();
 
+  /**
+   * 将文本拆分为高亮和非高亮部分
+   * @param text - 原始文本
+   * @param query - 查询词
+   * @returns 拆分后的文本片段数组
+   */
   function getHighlightedParts(text: string, query: string) {
     if (!query) return [{ text, highlight: false }];
 
@@ -31,6 +40,7 @@
     return parts;
   }
 
+  /** 计算高亮部分 */
   let parts = $derived(getHighlightedParts(text, query));
 </script>
 

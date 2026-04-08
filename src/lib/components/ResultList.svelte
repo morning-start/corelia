@@ -3,12 +3,19 @@
   import type { SearchItem } from '$lib/search/fuzzy';
   import HighlightedText from './HighlightedText.svelte';
 
+  /** 结果列表组件属性接口 */
   interface Props {
+    /** 搜索结果列表 */
     results: FilterResult<SearchItem>[];
+    /** 当前选中的索引 */
     selectedIndex?: number;
+    /** 是否显示搜索历史 */
     showHistory?: boolean;
+    /** 历史记录列表 */
     historyItems?: string[];
+    /** 结果项选择回调 */
     onSelect?: (item: SearchItem | string, index: number) => void;
+    /** 历史记录选择回调 */
     onHistorySelect?: (query: string) => void;
   }
 
@@ -21,6 +28,11 @@
     onHistorySelect
   }: Props = $props();
 
+  /**
+   * 处理选择事件
+   * @param item - 被选中的项
+   * @param index - 被选中的索引
+   */
   function handleSelect(item: SearchItem | string, index: number) {
     if (showHistory && typeof item === 'string') {
       onHistorySelect?.(item);

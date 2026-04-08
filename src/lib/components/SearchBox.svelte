@@ -1,12 +1,20 @@
 <script lang="ts">
+  /** 搜索框组件属性接口 */
   interface Props {
+    /** 当前搜索值 */
     value?: string;
+    /** 输入框占位文本 */
     placeholder?: string;
+    /** 输入事件回调 */
     onInput?: (value: string) => void;
   }
 
   let { value = $bindable(''), placeholder = '搜索...', onInput }: Props = $props();
 
+  /**
+   * 处理输入事件
+   * @param event - 输入事件对象
+   */
   function handleInput(event: Event) {
     const target = event.target as HTMLInputElement;
     value = target.value;
