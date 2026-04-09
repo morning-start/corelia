@@ -43,10 +43,6 @@
 
   /**
    * 组件挂载时初始化
-   * - 加载系统配置和用户配置
-   * - 初始化搜索历史
-   * - 注册全局快捷键
-   * - 监听窗口焦点变化
    */
   onMount(() => {
     // 加载系统配置和用户配置
@@ -85,11 +81,9 @@
       console.error("快捷键注册失败:", e);
     });
 
-    // 监听窗口焦点变化，实现失焦自动隐藏
+    // 监听窗口焦点变化
     const unlistenFocus = appWindow.onFocusChanged(async ({ payload: focused }) => {
-      console.log('窗口焦点变化:', focused);
       if (!focused && userConfigSnapshot.autoHide) {
-        console.log('窗口失焦，自动隐藏');
         await invoke('hide_window');
       }
     });
@@ -107,9 +101,6 @@
 
   /**
    * 处理键盘事件
-   * - Escape: 关闭设置面板或隐藏窗口
-   * - ArrowUp/Down: 选择上/下一个结果
-   * - Enter: 确认选择
    */
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
@@ -180,79 +171,33 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div
-  class="window-container"
->
-  <TitleBar onSettingsClick={() => showSettings = true} />
+<div class="window-container">
+  <TitleBar onSettingsClick={() => showSettings = !showSettings} />
 
   <main>
-    {#if showSettings}
-      <SettingPanel onClose={() => showSettings = false} />
-    {:else}
-      <div class="search-container">
-        <SearchBox
-          value={queryValue}
-          placeholder="搜索..."
-          onInput={handleSearchInput}
-        />
-        {#if !queryValue}
-          <ResultList
-            results={[]}
-            {selectedIndex}
-            showHistory={true}
-            {historyItems}
-            onHistorySelect={handleHistorySelect}
-          />
-        {:else}
-          <CategoryTabs
-            selected={selectedCategory}
-            onSelect={handleCategoryChange}
-          />
-          <ResultList
-            results={resultsValue}
-            {selectedIndex}
-            onSelect={handleSelectItem}
-          />
-        {/if}
-      </div>
-    {/if}
+    <div class="search-container">
+      <SearchBox
+        value={queryValue}
+        onInput={handleSearchInput}
+      />
+
+      <CategoryTabs
+        selected={selectedCategory}
+        onSelect={handleCategoryChange}
+      />
+
+      <ResultList
+        results={resultsValue}
+        selectedIndex={selectedIndex}
+        showHistory={queryValue.length === 0}
+        historyItems={historyItems}
+        onSelect={handleSelectItem}
+        onHistorySelect={handleHistorySelect}
+      />
+    </div>
   </main>
+
+  {#if showSettings}
+    <SettingPanel onClose={() => showSettings = false} />
+  {/if}
 </div>
-
-<style>
-  :global(html, body) {
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    overflow: hidden;
-  }
-
-  :global(body) {
-    background: transparent;
-  }
-
-  .window-container {
-    background: var(--bg-color);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 12px;
-    overflow: hidden;
-  }
-
-  .search-container {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-</style>

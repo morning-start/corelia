@@ -1,50 +1,119 @@
+/**
+ * Corelia Design System - 专业启动器设计
+ *
+ * 参考 Raycast / Alfred 风格
+ * 高对比度、清晰层次、精致细节
+ */
+
+/* ==================== 全局重置 ==================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #1a1a1f;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==================== 窗口容器 ==================== */
+.window-container {
+  width: 720px;
+  min-height: 80px;
+  max-height: 600px;
+  background: #1e1e24;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 25px 50px -12px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.search-container {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==================== 设计令牌 ==================== */
 :root {
-  --radius: 12px;
-  --bg-color: rgba(26, 26, 26, 0.95);
-  --bg-hover: rgba(255, 255, 255, 0.05);
+  /* 背景层级 - 高对比度 */
+  --bg-primary: #1e1e24;
+  --bg-secondary: #25252c;
+  --bg-tertiary: #2a2a32;
+  --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-active: rgba(255, 255, 255, 0.1);
-  --text-color: #f6f6f6;
-  --text-secondary: rgba(255, 255, 255, 0.6);
-  --accent-color: #646cff;
-  --accent-hover: #5058e6;
-  --border-color: rgba(255, 255, 255, 0.1);
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --bg-selected: rgba(99, 102, 241, 0.15);
+
+  /* 文字层级 - 高对比度 */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.75);
+  --text-tertiary: rgba(255, 255, 255, 0.5);
+  --text-muted: rgba(255, 255, 255, 0.35);
+
+  /* 主色调 - 明亮的 Indigo */
+  --color-primary: #6366f1;
+  --color-primary-light: #818cf8;
+  --color-primary-dark: #4f46e5;
+
+  /* 功能色 */
+  --color-system: #3b82f6;
+  --color-plugin: #a855f7;
+  --color-file: #22c55e;
+  --color-app: #ec4899;
+
+  /* 边框 */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-focus: rgba(99, 102, 241, 0.5);
+
+  /* 间距 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* 字体 */
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-base: 15px;
+  --font-size-lg: 18px;
 }
 
-[data-theme="light"] {
-  --bg-color: rgba(255, 255, 255, 0.95);
-  --bg-hover: rgba(0, 0, 0, 0.05);
-  --bg-active: rgba(0, 0, 0, 0.1);
-  --text-color: #1a1a1a;
-  --text-secondary: rgba(0, 0, 0, 0.6);
-  --accent-color: #646cff;
-  --accent-hover: #5058e6;
-  --border-color: rgba(0, 0, 0, 0.1);
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+/* ==================== 滚动条 ==================== */
+::-webkit-scrollbar {
+  width: 8px;
 }
 
-[data-theme="system"] {
-  --bg-color: rgba(26, 26, 26, 0.95);
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-active: rgba(255, 255, 255, 0.1);
-  --text-color: #f6f6f6;
-  --text-secondary: rgba(255, 255, 255, 0.6);
-  --accent-color: #646cff;
-  --accent-hover: #5058e6;
-  --border-color: rgba(255, 255, 255, 0.1);
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-@media (prefers-color-scheme: light) {
-  :root[data-theme="system"] {
-    --bg-color: rgba(255, 255, 255, 0.95);
-    --bg-hover: rgba(0, 0, 0, 0.05);
-    --bg-active: rgba(0, 0, 0, 0.1);
-    --text-color: #1a1a1a;
-    --text-secondary: rgba(0, 0, 0, 0.6);
-    --accent-color: #646cff;
-    --accent-hover: #5058e6;
-    --border-color: rgba(0, 0, 0, 0.1);
-    --shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }

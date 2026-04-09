@@ -22,7 +22,6 @@
 
   /**
    * 切换分类
-   * @param cat - 要选中的分类
    */
   function selectCategory(cat: Category) {
     selected = cat;
@@ -49,9 +48,9 @@
   .category-tabs {
     display: flex;
     gap: 4px;
-    padding: 4px;
-    background: var(--bg-hover);
-    border-radius: 8px;
+    padding: 12px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-subtle);
   }
 
   .tab {
@@ -61,26 +60,28 @@
     padding: 6px 12px;
     background: transparent;
     border: none;
-    border-radius: 6px;
-    color: var(--text-secondary);
-    font-size: 13px;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.15s ease;
   }
 
   .tab:hover {
-    color: var(--text-color);
-    background: var(--bg-active);
+    color: var(--text-secondary);
+    background: var(--bg-hover);
   }
 
   .tab.active {
-    color: var(--text-color);
-    background: var(--accent-color);
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   .tab-icon {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
 
   .tab-label {

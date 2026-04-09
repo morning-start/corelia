@@ -106,6 +106,9 @@ docs/spec/     # 规格说明书
 - **skill-manager**: 技能生命周期管理
 - **project-wiki**: 文档生成（README/ARCHITECTURE 等）
 - **gstack**: QA 测试/部署/代码审查
+- **ui-ux-pro-max**: UI/UX 设计（50+ 样式/161 配色/57 字体组合）
+- **web-design-guidelines**: Web 界面规范审查（可访问性/UX 最佳实践）
+- **software-design**: 软件设计与编码规范（程序设计/状态管理/模块化/错误处理）
 
 **调用规则**:
 1. **优先调用技能**: 匹配技能时不直接回答，调用技能工具
@@ -162,7 +165,8 @@ $B is visible ".x"   # 断言
 | v1.0 | 2026-04-03 | 初稿创建 |
 | v1.1 | 2026-04-03 | 增加 Spec 流程规范 |
 | v1.2 | 2026-04-04 | 添加技能使用规范章节 |
+| v1.3 | 2026-04-09 | 补充 ui-ux-pro-max、web-design-guidelines、software-design 技能 |
 
 ---
 
-**最后更新**: 2026-04-04
+**最后更新**: 2026-04-09

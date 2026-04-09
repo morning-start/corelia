@@ -14,10 +14,10 @@
       {
         "title": "corelia",
         "label": "main",
-        "width": 600,
-        "height": 400,
+        "width": 680,
+        "height": 520,
         "decorations": false,
-        "transparent": true,
+        "transparent": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "resizable": false,

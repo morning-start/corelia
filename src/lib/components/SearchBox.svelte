@@ -9,34 +9,51 @@
     onInput?: (value: string) => void;
   }
 
-  let { value = $bindable(''), placeholder = '搜索...', onInput }: Props = $props();
+  let { value = $bindable(''), placeholder = '搜索应用、命令或文件...', onInput }: Props = $props();
 
   /**
    * 处理输入事件
-   * @param event - 输入事件对象
    */
   function handleInput(event: Event) {
     const target = event.target as HTMLInputElement;
     value = target.value;
     onInput?.(value);
   }
+
+  /**
+   * 清除输入内容
+   */
+  function clearInput() {
+    value = '';
+    onInput?.('');
+  }
 </script>
 
 <div class="search-box">
-  <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <circle cx="11" cy="11" r="8"/>
-    <path d="m21 21-4.35-4.35"/>
-  </svg>
+  <div class="search-icon-wrapper">
+    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <path d="m21 21-4.3-4.3"/>
+    </svg>
+  </div>
+
   <input
     type="text"
+    class="search-input"
     {value}
     {placeholder}
     oninput={handleInput}
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
   />
+
   {#if value}
-    <button class="clear-btn" aria-label="清除搜索" onclick={() => { value = ''; onInput?.(''); }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M18 6L6 18M6 6l12 12"/>
+    <button class="clear-btn" onclick={clearInput} aria-label="清除">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6 6 18"/>
+        <path d="m6 6 12 12"/>
       </svg>
     </button>
   {/if}
@@ -46,54 +63,70 @@
   .search-box {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    background: var(--bg-hover);
-    border-radius: var(--radius);
-    border: 1px solid var(--border-color);
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-subtle);
   }
 
-  .search-icon {
-    width: 20px;
-    height: 20px;
-    color: var(--text-secondary);
+  .search-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
     flex-shrink: 0;
   }
 
-  input {
+  .search-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--text-tertiary);
+  }
+
+  .search-input {
     flex: 1;
     background: transparent;
     border: none;
     outline: none;
-    color: var(--text-color);
-    font-size: 16px;
+    font-size: 20px;
+    font-weight: 400;
+    font-family: inherit;
+    color: var(--text-primary);
+    min-width: 0;
+    padding: 4px 0;
   }
 
-  input::placeholder {
-    color: var(--text-secondary);
+  .search-input::placeholder {
+    color: var(--text-muted);
   }
 
+  /* 清除按钮 */
   .clear-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     padding: 0;
-    background: transparent;
+    background: var(--text-muted);
     border: none;
+    border-radius: 50%;
     cursor: pointer;
-    color: var(--text-secondary);
-    border-radius: 4px;
+    color: var(--bg-primary);
+    transition: all 0.15s ease;
+    flex-shrink: 0;
   }
 
   .clear-btn:hover {
-    color: var(--text-color);
-    background: var(--bg-active);
+    background: var(--text-tertiary);
+    transform: scale(1.05);
   }
 
   .clear-btn svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
 </style>

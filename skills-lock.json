@@ -35,6 +35,16 @@
       "source": "morning-start/book-skills",
       "sourceType": "github",
       "computedHash": "3f34a44f8eba168d3a340e97e09d1c2cc2b6d9bdcf0deb42c1e8646a9c134506"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "6337038fe1fe6bbe1b9f252ab678ee575859190bab6f0f246f4061824eb40875"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "f3bc47f890f42a44db1007ab390709ec368e4b8c089baee6b0007182236ac474"
     }
   }
 }
