@@ -2,11 +2,13 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import type { FilterResult } from 'fuzzy';
   import { theme } from '$lib/stores/theme';
   import { system } from '$lib/stores/system';
   import { user } from '$lib/stores/user';
   import { searchHistory } from '$lib/stores/history';
-  import { searchStore } from '$lib/stores/search';
+  import { searchStore, type ExecutableItem } from '$lib/stores/search';
+  import { resultExecutor } from '$lib/services/executor';
   import SearchBox from '$lib/components/SearchBox.svelte';
   import ResultList from '$lib/components/ResultList.svelte';
   import TitleBar from '$lib/components/TitleBar.svelte';
@@ -24,7 +26,7 @@
   /** 搜索查询词 */
   let queryValue = $state('');
   /** 搜索结果列表 */
-  let resultsValue = $state<any[]>([]);
+  let resultsValue = $state<FilterResult<ExecutableItem>[]>([]);
   /** 搜索历史列表 */
   let historyItems = $state<string[]>([]);
   /** 当前选中的分类 */
@@ -102,31 +104,73 @@
   /**
    * 处理键盘事件
    */
-  function handleKeydown(event: KeyboardEvent) {
+  async function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       if (showSettings) {
         showSettings = false;
       } else {
-        invoke('hide_window').catch(console.error);
+        await invoke('hide_window').catch(console.error);
       }
+      return;
     }
+
+    // 方向键导航
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      if (selectedIndex < resultsValue.length - 1) {
+      const totalItems = queryValue.length === 0
+        ? historyItems.length
+        : resultsValue.length;
+      if (selectedIndex < totalItems - 1) {
         selectedIndex++;
       }
+      return;
     }
+
     if (event.key === 'ArrowUp') {
       event.preventDefault();
       if (selectedIndex > 0) {
         selectedIndex--;
       }
+      return;
     }
-    if (event.key === 'Enter' && selectedIndex >= 0) {
-      const result = resultsValue[selectedIndex];
-      if (result) {
-        console.log('Selected:', result.original);
+
+    // Enter 执行选中项
+    if (event.key === 'Enter') {
+      event.preventDefault();
+
+      // 如果有搜索词，执行搜索结果
+      if (queryValue.length > 0 && selectedIndex >= 0) {
+        const result = resultsValue[selectedIndex];
+        if (result?.original) {
+          await executeItem(result.original as ExecutableItem);
+        }
       }
+      // 如果没有搜索词，执行历史记录
+      else if (queryValue.length === 0 && selectedIndex >= 0) {
+        const historyQuery = historyItems[selectedIndex];
+        if (historyQuery) {
+          handleHistorySelect(historyQuery);
+        }
+      }
+      return;
+    }
+  }
+
+  /**
+   * 执行搜索项
+   * @param item - 要执行的项
+   */
+  async function executeItem(item: ExecutableItem) {
+    const result = await resultExecutor.execute(item);
+
+    if (result.success) {
+      console.log('执行成功:', result.message);
+      // 清空搜索词
+      searchStore.clearQuery();
+      selectedIndex = -1;
+    } else {
+      console.error('执行失败:', result.message);
+      // 可以在这里添加错误提示 UI
     }
   }
 
@@ -142,13 +186,11 @@
   }
 
   /**
-   * 处理选择结果项
+   * 处理选择结果项（鼠标点击）
    */
-  function handleSelectItem(item: any, index: number) {
+  async function handleSelectItem(item: ExecutableItem, index: number) {
     console.log('Selected item:', item);
-    if (item.action) {
-      item.action();
-    }
+    await executeItem(item);
   }
 
   /**

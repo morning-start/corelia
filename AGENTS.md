@@ -103,7 +103,6 @@ docs/spec/     # 规格说明书
 - **tauri-skills**: Tauri v2 开发（窗口/事件/权限/插件）
 - **svelte-skills**: Svelte 5 开发（Runes/组件/状态管理）
 - **rust-skills**: Rust 编程（所有权/并发/异步）
-- **skill-manager**: 技能生命周期管理
 - **project-wiki**: 文档生成（README/ARCHITECTURE 等）
 - **gstack**: QA 测试/部署/代码审查
 - **ui-ux-pro-max**: UI/UX 设计（50+ 样式/161 配色/57 字体组合）

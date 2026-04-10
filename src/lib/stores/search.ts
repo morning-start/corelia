@@ -1,8 +1,10 @@
 import { writable, derived, type Readable, type Writable } from 'svelte/store';
-import { search, generateTestData, type SearchItem } from '$lib/search/fuzzy';
+import { search, type SearchItem } from '$lib/search/fuzzy';
+import { createSystemItems, type ExecutableItem } from '$lib/services/executor';
 
 /** 导出搜索项类型 */
 export type { SearchItem };
+export type { ExecutableItem };
 
 /**
  * 搜索状态管理类
@@ -14,10 +16,11 @@ class SearchStore {
   /** 搜索结果（派生自 query 和 items） */
   results: Readable<any[]>;
   /** 搜索数据项列表 */
-  items: Writable<SearchItem[]>;
+  items: Writable<ExecutableItem[]>;
 
   constructor() {
-    this.items = writable<SearchItem[]>(generateTestData(100));
+    // 使用真实的系统内置项替代测试数据
+    this.items = writable<ExecutableItem[]>(createSystemItems());
     this.query = writable('');
     this.results = derived(
       [this.query, this.items],
@@ -41,6 +44,29 @@ class SearchStore {
    */
   clearQuery() {
     this.query.set('');
+  }
+
+  /**
+   * 添加搜索项
+   * @param item - 要添加的搜索项
+   */
+  addItem(item: ExecutableItem) {
+    this.items.update(items => [...items, item]);
+  }
+
+  /**
+   * 移除搜索项
+   * @param id - 要移除的项 ID
+   */
+  removeItem(id: string) {
+    this.items.update(items => items.filter(item => item.id !== id));
+  }
+
+  /**
+   * 重置为系统默认项
+   */
+  resetToDefaults() {
+    this.items.set(createSystemItems());
   }
 }
 

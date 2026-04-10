@@ -1,11 +1,11 @@
 <script lang="ts">
   import type { FilterResult } from 'fuzzy';
-  import type { SearchItem } from '$lib/search/fuzzy';
+  import type { ExecutableItem } from '$lib/services/executor';
 
   /** 结果列表组件属性接口 */
   interface Props {
     /** 搜索结果列表 */
-    results: FilterResult<SearchItem>[];
+    results: FilterResult<ExecutableItem>[];
     /** 当前选中的索引 */
     selectedIndex?: number;
     /** 是否显示搜索历史 */
@@ -13,7 +13,7 @@
     /** 历史记录列表 */
     historyItems?: string[];
     /** 结果项选择回调 */
-    onSelect?: (item: SearchItem | string, index: number) => void;
+    onSelect?: (item: ExecutableItem, index: number) => void;
     /** 历史记录选择回调 */
     onHistorySelect?: (query: string) => void;
   }
@@ -54,14 +54,17 @@
   }
 
   /**
-   * 处理选择事件
+   * 处理历史记录选择
    */
-  function handleSelect(item: SearchItem | string, index: number) {
-    if (showHistory && typeof item === 'string') {
-      onHistorySelect?.(item);
-    } else {
-      onSelect?.(item as SearchItem, index);
-    }
+  function handleHistorySelect(historyItem: string, index: number) {
+    onHistorySelect?.(historyItem);
+  }
+
+  /**
+   * 处理搜索结果项选择
+   */
+  function handleResultSelect(item: ExecutableItem, index: number) {
+    onSelect?.(item, index);
   }
 </script>
 
@@ -77,7 +80,7 @@
           <button
             class="result-item"
             class:selected={selectedIndex === index}
-            onclick={() => handleSelect(historyItem, index)}
+            onclick={() => handleHistorySelect(historyItem, index)}
           >
             <div class="icon-wrapper history">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -115,7 +118,7 @@
           <button
             class="result-item"
             class:selected={selectedIndex === actualIndex}
-            onclick={() => handleSelect(item, actualIndex)}
+            onclick={() => handleResultSelect(item, actualIndex)}
           >
             <div class="icon-wrapper" style="background: {colors.bg}; color: {colors.icon};">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
