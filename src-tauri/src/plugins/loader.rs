@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Instant;
+use tauri::Emitter;
 
 use crate::plugins::quickjs_runtime::QuickJSRuntime;
 
@@ -294,6 +295,14 @@ impl PluginLoader {
         self.instances.values().collect()
     }
 
+    /// 获取所有插件元数据列表（用于 Command 返回）
+    ///
+    /// # Returns
+    /// 所有插件的 manifest 副本
+    pub fn list_manifests(&self) -> Vec<PluginManifest> {
+        self.instances.values().map(|p| p.manifest.clone()).collect()
+    }
+
     /// 根据 ID 获取插件
     ///
     /// # Arguments
@@ -340,29 +349,22 @@ impl PluginLoader {
         matches
     }
 
-    /// 完整加载指定插件（包括 JS 代码执行）
+    /// 加载指定插件（包括 JS 代码执行）
     ///
     /// 此方法会：
     /// 1. 检查插件是否存在和当前状态
     /// 2. 读取入口文件（index.js 或 manifest.main 指定的文件）
     /// 3. 创建 QuickJS VM 实例
-    /// 4. 在 VM 中执行插件代码
+    /// 4. 在 VM 中注入 uTools API 并执行插件代码
     /// 5. 更新插件状态为 Ready
     ///
     /// # Arguments
     /// - `id`: 要加载的插件 ID
     ///
     /// # Returns
-    /// - `Ok(PluginState)`: 加载完成后的新状态
+    /// - `Ok((PluginState, Option<String>))`: 加载完成后的新状态和 VM ID
     /// - `Err(String)`: 错误信息
-    ///
-    /// # State Machine
-    /// ```
-    /// MetaLoaded ──→ Loading ──→ Ready
-    ///     ↑                      │
-    ///     └──────── Unloaded ←───┘
-    /// ```
-    pub fn load_plugin(&mut self, id: &str) -> Result<PluginState, String> {
+    pub fn load_plugin(&mut self, id: &str) -> Result<(PluginState, Option<String>), String> {
         // 1. 检查插件是否存在
         let instance = self.instances.get_mut(id)
             .ok_or_else(|| format!("插件不存在: {}", id))?;
@@ -370,21 +372,30 @@ impl PluginLoader {
         // 2. 检查当前状态（仅允许从 MetaLoaded 或 Unloaded 状态加载）
         match &instance.state {
             PluginState::Ready | PluginState::Loading => {
-                return Ok(instance.state.clone()); // 已经加载或正在加载中
+                // 已加载或正在加载中，直接返回当前状态 + 已有的 vm_id
+                let vm = instance.vm_id.clone();
+                return Ok((instance.state.clone(), vm));
             }
             PluginState::MetaLoaded | PluginState::Unloaded | PluginState::Cached | PluginState::Error(_) => {
                 // 允许从这些状态重新加载
             }
         }
 
-        // 3. 更新状态为 Loading
+        // 3. 清理闲置超时的 VM（释放资源）
+        if let Ok(cleaned) = self.quickjs_runtime.cleanup() {
+            if cleaned > 0 {
+                println!("[PluginLoader] 清理了 {} 个闲置 VM", cleaned);
+            }
+        }
+
+        // 4. 更新状态为 Loading
         instance.state = PluginState::Loading;
 
-        // 4. 确定入口文件路径
+        // 5. 确定入口文件路径
         let main_file = instance.manifest.main.as_deref().unwrap_or("index.js");
         let entry_path = instance.plugin_dir.join(main_file);
 
-        // 5. 读取入口文件内容
+        // 6. 读取入口文件内容
         if !entry_path.exists() {
             instance.state = PluginState::Error(format!("入口文件不存在: {}", entry_path.display()));
             return Err(format!("入口文件不存在: {}", entry_path.display()));
@@ -396,17 +407,17 @@ impl PluginLoader {
                 format!("读取入口文件失败: {}", e)
             })?;
 
-        // 6. 创建 QuickJS VM
+        // 7. 创建 QuickJS VM
         let vm_id = self.quickjs_runtime.create_vm()
             .map_err(|e| {
                 instance.state = PluginState::Error(format!("创建 VM 失败: {}", e));
                 format!("创建 VM 失败: {}", e)
             })?;
 
-        // 7. 记录 vm_id 到 instance
+        // 8. 记录 vm_id 到 instance
         instance.vm_id = Some(vm_id.clone());
 
-        // 8. 注入 uTools API 到 VM
+        // 9. 注入 uTools API 到 VM
         let vm_id_for_inject = vm_id.clone();
         let plugin_id = id.to_string();
         if let Err(e) = self.quickjs_runtime.with_context(&vm_id_for_inject, |ctx| {
@@ -419,16 +430,16 @@ impl PluginLoader {
         }
         println!("[PluginLoader] API 注入成功: {}", id);
 
-        // 9. 执行插件代码
+        // 10. 执行插件代码
         match self.quickjs_runtime.execute(&vm_id, &code) {
             Ok(_) => {
-                // 9. 更新状态为 Ready
+                // 11. 更新状态为 Ready
                 instance.state = PluginState::Ready;
                 instance.loaded_at = Some(Instant::now());
                 instance.last_used = Some(Instant::now());
 
                 println!("[PluginLoader] 插件加载成功: {} (VM: {})", id, vm_id);
-                Ok(instance.state.clone())
+                Ok((instance.state.clone(), Some(vm_id)))
             }
             Err(e) => {
                 // 执行失败，清理 VM 并更新状态
@@ -458,6 +469,11 @@ impl PluginLoader {
         // 1. 检查插件是否存在
         let instance = self.instances.get_mut(id)
             .ok_or_else(|| format!("插件不存在: {}", id))?;
+
+        // 触发 onPluginOut 事件
+        if let Some(app) = crate::plugins::api_bridge::get_app_handle() {
+            let _ = app.emit("plugin-out", id.to_string());
+        }
 
         // 2. 如果有关联的 VM，销毁它
         if let Some(ref vm_id) = instance.vm_id {
@@ -538,11 +554,7 @@ pub fn scan_plugins(
     let mut loader = loader.lock().map_err(|e| e.to_string())?;
     let _ids = loader.scan_plugins()?;
 
-    // 返回所有插件的 manifest 信息
-    Ok(loader.list_plugins()
-        .into_iter()
-        .map(|p| p.manifest.clone())
-        .collect())
+    Ok(loader.list_manifests())
 }
 
 /// 获取插件列表
@@ -557,27 +569,32 @@ pub fn get_plugin_list(
     loader: tauri::State<'_, Mutex<PluginLoader>>,
 ) -> Result<Vec<PluginManifest>, String> {
     let loader = loader.lock().map_err(|e| e.to_string())?;
-    Ok(loader.list_plugins()
-        .into_iter()
-        .map(|p| p.manifest.clone())
-        .collect())
+    Ok(loader.list_manifests())
 }
 
 /// 加载指定插件
 ///
 /// 前端调用示例：
 /// ```typescript
-/// const state = await invoke('load_plugin', { id: 'hello-world' });
-/// console.log(state); // "Ready"
+/// const result = await invoke('load_plugin', { id: 'hello-world' });
+/// console.log(result.state); // "Ready"
+/// console.log(result.vmId);  // "vm_1744356789012_xxx"
 /// ```
 #[tauri::command]
 pub fn load_plugin(
     loader: tauri::State<'_, Mutex<PluginLoader>>,
     id: String,
-) -> Result<String, String> {
+) -> Result<LoadResult, String> {
     let mut loader = loader.lock().map_err(|e| e.to_string())?;
-    let state = loader.load_plugin(&id)?;
-    Ok(format!("{}", state))
+    let (state, vm_id) = loader.load_plugin(&id)?;
+    Ok(LoadResult { state: format!("{}", state), vm_id })
+}
+
+/// 加载插件命令的返回值
+#[derive(serde::Serialize)]
+pub struct LoadResult {
+    pub state: String,
+    pub vm_id: Option<String>,
 }
 
 /// 卸载指定插件

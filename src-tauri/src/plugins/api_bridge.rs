@@ -21,7 +21,7 @@
 use rquickjs::{Ctx, Object, Function};
 use std::sync::{Mutex, OnceLock};
 use crate::plugins::quickjs_runtime::QuickJSRuntime;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
@@ -30,20 +30,34 @@ pub fn set_app_handle(app: AppHandle) {
     let _ = APP_HANDLE.set(app);
 }
 
-fn get_app_handle() -> Option<AppHandle> {
+pub(crate) fn get_app_handle() -> Option<AppHandle> {
     APP_HANDLE.get().cloned()
 }
 
-/// API 桥接层：将 Rust 函数注入到 QuickJS 上下文
-pub struct ApiBridge {
-    app_handle: Option<AppHandle>,
+/// 获取全局 AppHandle，若未初始化则返回 rquickjs::Error
+///
+/// 用于 ApiBridge 注入的 JS 回调函数中，消除重复的 match 模式。
+/// # Usage
+/// ```ignore
+/// let app = require_app!("myFunctionName");
+/// ```
+macro_rules! require_app {
+    ($fn_name:expr) => {
+        match get_app_handle() {
+            Some(h) => h,
+            None => return Err(rquickjs::Error::new_from_js_message(
+                $fn_name, "Error", "AppHandle not initialized"
+            )),
+        }
+    };
 }
 
-impl ApiBridge {
-    pub fn new(app_handle: Option<AppHandle>) -> Self {
-        Self { app_handle }
-    }
+/// API 桥接层：将 Rust 函数注入到 QuickJS 全局上下文
+///
+/// 所有 API 注入通过静态方法完成，AppHandle 通过全局单例获取。
+pub struct ApiBridge;
 
+impl ApiBridge {
     /// 注入完整的 utools 对象到 QuickJS 全局上下文
     /// instance_id: 当前注入的插件实例 ID，用于事件通知
     pub fn inject_utools(ctx: &Ctx, instance_id: &str) -> Result<(), String> {
@@ -52,10 +66,13 @@ impl ApiBridge {
         let globals = ctx.globals();
         let utools_obj = Object::new(ctx.clone()).map_err(|e| format!("创建 utools 对象失败: {}", e))?;
 
-        inject_db_storage(ctx, &utools_obj)?;
+        inject_db_storage(ctx, &utools_obj, instance_id.to_string())?;
         inject_clipboard(ctx, &utools_obj)?;
         inject_shell(ctx, &utools_obj)?;
         inject_window_functions(ctx, &utools_obj)?;
+        inject_path_functions(ctx, &utools_obj)?;
+        inject_notification_functions(ctx, &utools_obj)?;
+        inject_enhanced_clipboard(ctx, &utools_obj)?;
         inject_file_functions(ctx, &utools_obj)?;
         inject_plugin_callbacks(ctx, &utools_obj, instance_id.to_string())?;
 
@@ -66,19 +83,18 @@ impl ApiBridge {
     }
 }
 
-fn inject_db_storage<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<(), String> {
+fn inject_db_storage<'js>(ctx: &Ctx<'js>, parent: &Object<'js>, plugin_id: String) -> Result<(), String> {
     let db_obj = Object::new(ctx.clone()).map_err(|e| format!("创建 dbStorage 对象失败: {}", e))?;
+    let storage_path = format!("plugins/{}/storage.json", plugin_id);
 
-    #[allow(unused_variables)]
+    let plugin_id_get = plugin_id.clone();
+    let storage_path_get = storage_path.clone();
     let get_item_fn = Function::new(
         ctx.clone(),
-        |_ctx: Ctx<'_>, key: String| -> Result<Option<String>, rquickjs::Error> {
-            println!("[utools.dbStorage] getItem: {}", key);
-            let app = match get_app_handle() {
-                Some(h) => h,
-                None => return Err(rquickjs::Error::new_from_js_message("getItem", "Error", "AppHandle not initialized")),
-            };
-            match app.store("dbStorage.json") {
+        move |_ctx: Ctx<'_>, key: String| -> Result<Option<String>, rquickjs::Error> {
+            println!("[utools.dbStorage] getItem: {} (plugin: {})", key, plugin_id_get);
+            let app = require_app!("getItem");
+            match app.store(&storage_path_get) {
                 Ok(store) => {
                     match store.get(&key) {
                         Some(serde_json::Value::String(s)) => Ok(Some(s)),
@@ -95,16 +111,14 @@ fn inject_db_storage<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<(), St
     ).map_err(|e| format!("创建 getItem 函数失败: {}", e))?;
     db_obj.set("getItem", get_item_fn).map_err(|e| format!("设置 getItem 失败: {}", e))?;
 
-    #[allow(unused_variables)]
+    let plugin_id_set = plugin_id.clone();
+    let storage_path_set = storage_path.clone();
     let set_item_fn = Function::new(
         ctx.clone(),
-        |_ctx: Ctx<'_>, key: String, value: String| -> Result<(), rquickjs::Error> {
-            println!("[utools.dbStorage] setItem: {} = {:?}", key, value);
-            let app = match get_app_handle() {
-                Some(h) => h,
-                None => return Err(rquickjs::Error::new_from_js_message("setItem", "Error", "AppHandle not initialized")),
-            };
-            match app.store("dbStorage.json") {
+        move |_ctx: Ctx<'_>, key: String, value: String| -> Result<(), rquickjs::Error> {
+            println!("[utools.dbStorage] setItem: {} = {:?} (plugin: {})", key, value, plugin_id_set);
+            let app = require_app!("setItem");
+            match app.store(&storage_path_set) {
                 Ok(store) => {
                     store.set(&key, serde_json::Value::String(value));
                     if let Err(e) = store.save() {
@@ -122,16 +136,14 @@ fn inject_db_storage<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<(), St
     ).map_err(|e| format!("创建 setItem 函数失败: {}", e))?;
     db_obj.set("setItem", set_item_fn).map_err(|e| format!("设置 setItem 失败: {}", e))?;
 
-    #[allow(unused_variables)]
+    let plugin_id_remove = plugin_id.clone();
+    let storage_path_remove = storage_path.clone();
     let remove_item_fn = Function::new(
         ctx.clone(),
-        |_ctx: Ctx<'_>, key: String| -> Result<(), rquickjs::Error> {
-            println!("[utools.dbStorage] removeItem: {}", key);
-            let app = match get_app_handle() {
-                Some(h) => h,
-                None => return Err(rquickjs::Error::new_from_js_message("removeItem", "Error", "AppHandle not initialized")),
-            };
-            match app.store("dbStorage.json") {
+        move |_ctx: Ctx<'_>, key: String| -> Result<(), rquickjs::Error> {
+            println!("[utools.dbStorage] removeItem: {} (plugin: {})", key, plugin_id_remove);
+            let app = require_app!("removeItem");
+            match app.store(&storage_path_remove) {
                 Ok(store) => {
                     store.delete(&key);
                     if let Err(e) = store.save() {
@@ -149,16 +161,14 @@ fn inject_db_storage<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<(), St
     ).map_err(|e| format!("创建 removeItem 函数失败: {}", e))?;
     db_obj.set("removeItem", remove_item_fn).map_err(|e| format!("设置 removeItem 失败: {}", e))?;
 
-    #[allow(unused_variables)]
+    let plugin_id_all = plugin_id.clone();
+    let storage_path_all = storage_path.clone();
     let get_all_fn = Function::new(
         ctx.clone(),
-        |_ctx: Ctx<'_>, ()| -> Result<std::collections::HashMap<String, String>, rquickjs::Error> {
-            println!("[utools.dbStorage] getAll");
-            let app = match get_app_handle() {
-                Some(h) => h,
-                None => return Err(rquickjs::Error::new_from_js_message("getAll", "Error", "AppHandle not initialized")),
-            };
-            let store = match app.store("dbStorage.json") {
+        move |_ctx: Ctx<'_>, ()| -> Result<std::collections::HashMap<String, String>, rquickjs::Error> {
+            println!("[utools.dbStorage] getAll (plugin: {})", plugin_id_all);
+            let app = require_app!("getAll");
+            let store = match app.store(&storage_path_all) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("[utools.dbStorage] getAll 获取存储失败: {}", e);
@@ -177,7 +187,7 @@ fn inject_db_storage<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<(), St
     db_obj.set("getAll", get_all_fn).map_err(|e| format!("设置 getAll 失败: {}", e))?;
 
     parent.set("dbStorage", db_obj).map_err(|e| format!("设置 dbStorage 失败: {}", e))?;
-    println!("[ApiBridge]   ✓ dbStorage 模块注入成功");
+    println!("[ApiBridge]   ✓ dbStorage 模块注入成功 (隔离存储: {})", storage_path);
     Ok(())
 }
 
@@ -323,10 +333,7 @@ fn inject_window_functions<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<
         ctx.clone(),
         |_ctx: Ctx<'_>, ()| -> Result<(), rquickjs::Error> {
             println!("[utools] hideMainWindow 被调用");
-            let app = match get_app_handle() {
-                Some(h) => h,
-                None => return Err(rquickjs::Error::new_from_js_message("hideMainWindow", "Error", "AppHandle not initialized")),
-            };
+            let app = require_app!("hideMainWindow");
             crate::services::WindowService::hide(&app)
                 .map_err(|e| rquickjs::Error::new_from_js_message("hideMainWindow", "Error", e))
         },
@@ -338,10 +345,7 @@ fn inject_window_functions<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<
         ctx.clone(),
         |_ctx: Ctx<'_>, ()| -> Result<(), rquickjs::Error> {
             println!("[utools] showMainWindow 被调用");
-            let app = match get_app_handle() {
-                Some(h) => h,
-                None => return Err(rquickjs::Error::new_from_js_message("showMainWindow", "Error", "AppHandle not initialized")),
-            };
+            let app = require_app!("showMainWindow");
             crate::services::WindowService::show(&app)
                 .map_err(|e| rquickjs::Error::new_from_js_message("showMainWindow", "Error", e))
         },
@@ -349,6 +353,139 @@ fn inject_window_functions<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<
     parent.set("showMainWindow", show_fn).map_err(|e| format!("设置 showMainWindow 失败: {}", e))?;
 
     println!("[ApiBridge]   ✓ 窗口控制函数注入成功");
+    Ok(())
+}
+
+fn inject_path_functions<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<(), String> {
+    #[allow(unused_variables)]
+    let get_path_fn = Function::new(
+        ctx.clone(),
+        |_ctx: Ctx<'_>, name: String| -> Result<String, rquickjs::Error> {
+            println!("[utools] getPath: {}", name);
+            let app = require_app!("getPath");
+            let path = app.path();
+
+            let result_path: Option<String> = if let Some(p) = match name.as_str() {
+                "home" | "HOME" | "~" => path.home_dir().ok(),
+                "desktop" | "DESKTOP" => path.desktop_dir().ok(),
+                "document" | "DOCUMENT" | "documents" => path.document_dir().ok(),
+                "download" | "DOWNLOAD" | "downloads" => path.download_dir().ok(),
+                "music" | "MUSIC" => path.audio_dir().ok(),
+                "picture" | "PICTURE" | "pictures" | "photo" | "PHOTO" => path.picture_dir().ok(),
+                "video" | "VIDEO" | "videos" => path.video_dir().ok(),
+                "temp" | "TEMP" | "tmp" => path.temp_dir().ok(),
+                "appdata" | "APPDATA" => path.app_data_dir().ok(),
+                "localappdata" | "LOCALAPPDATA" => path.app_local_data_dir().ok(),
+                _ => return Err(rquickjs::Error::new_from_js_message("getPath", "Error", format!("未知的路径名称: {}", name))),
+            } {
+                Some(p.to_string_lossy().to_string())
+            } else {
+                None
+            };
+
+            match result_path {
+                Some(p) => Ok(p),
+                None => Err(rquickjs::Error::new_from_js_message("getPath", "Error", format!("无法获取路径: {}", name))),
+            }
+        },
+    ).map_err(|e| format!("创建 getPath 函数失败: {}", e))?;
+    parent.set("getPath", get_path_fn).map_err(|e| format!("设置 getPath 失败: {}", e))?;
+
+    println!("[ApiBridge]   ✓ getPath 系统路径模块注入成功");
+    Ok(())
+}
+
+fn inject_notification_functions<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<(), String> {
+    #[allow(unused_variables)]
+    let show_notification_fn = Function::new(
+        ctx.clone(),
+        |_ctx: Ctx<'_>, title: String, body: String| -> Result<(), rquickjs::Error> {
+            println!("[utools] showNotification: {} - {}", title, body);
+            let app = require_app!("showNotification");
+
+            #[cfg(target_os = "windows")]
+            {
+                use std::process::Command;
+                // 通过环境变量安全传递参数，避免 shell 注入
+                let _ = Command::new("powershell")
+                    .args([
+                        "-NoProfile", "-Command",
+                        "Add-Type -AssemblyName System.Windows.Forms; \
+                         [System.Windows.Forms.MessageBox]::Show(\
+                           [System.Environment]::GetEnvironmentVariable('NOTIFY_BODY'), \
+                           [System.Environment]::GetEnvironmentVariable('NOTIFY_TITLE'), \
+                           'OK', 'Information')"
+                    ])
+                    .env("NOTIFY_TITLE", &title)
+                    .env("NOTIFY_BODY", &body)
+                    .spawn();
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                use std::process::Command;
+                // 通过环境变量安全传递参数，避免 shell 注入
+                let _ = Command::new("osascript")
+                    .args(["-e", "display notification (system attribute \"NOTIFY_BODY\" of environment) with title (system attribute \"NOTIFY_TITLE\" of environment)"])
+                    .env("NOTIFY_TITLE", &title)
+                    .env("NOTIFY_BODY", &body)
+                    .spawn();
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                use std::process::Command;
+                let _ = Command::new("notify-send")
+                    .args([&title, &body])
+                    .spawn();
+            }
+
+            #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+            {
+                eprintln!("[utools] showNotification: 不支持当前平台");
+            }
+
+            Ok(())
+        },
+    ).map_err(|e| format!("创建 showNotification 函数失败: {}", e))?;
+    parent.set("showNotification", show_notification_fn).map_err(|e| format!("设置 showNotification 失败: {}", e))?;
+
+    println!("[ApiBridge]   ✓ showNotification 通知模块注入成功");
+    Ok(())
+}
+
+fn inject_enhanced_clipboard<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<(), String> {
+    #[allow(unused_variables)]
+    let get_clipboard_image_fn = Function::new(
+        ctx.clone(),
+        |_ctx: Ctx<'_>, ()| -> Result<Option<String>, rquickjs::Error> {
+            println!("[utools] getClipboardImage");
+            Ok(None)
+        },
+    ).map_err(|e| format!("创建 getClipboardImage 函数失败: {}", e))?;
+    parent.set("getClipboardImage", get_clipboard_image_fn).map_err(|e| format!("设置 getClipboardImage 失败: {}", e))?;
+
+    #[allow(unused_variables)]
+    let set_clipboard_image_fn = Function::new(
+        ctx.clone(),
+        |_ctx: Ctx<'_>, _base64: String| -> Result<(), rquickjs::Error> {
+            println!("[utools] setClipboardImage");
+            Ok(())
+        },
+    ).map_err(|e| format!("创建 setClipboardImage 函数失败: {}", e))?;
+    parent.set("setClipboardImage", set_clipboard_image_fn).map_err(|e| format!("设置 setClipboardImage 失败: {}", e))?;
+
+    #[allow(unused_variables)]
+    let get_image_path_fn = Function::new(
+        ctx.clone(),
+        |_ctx: Ctx<'_>, _base64: String, _name: String| -> Result<String, rquickjs::Error> {
+            println!("[utools] getImagePath");
+            Err(rquickjs::Error::new_from_js_message("getImagePath", "Error", "未实现"))
+        },
+    ).map_err(|e| format!("创建 getImagePath 函数失败: {}", e))?;
+    parent.set("getImagePath", get_image_path_fn).map_err(|e| format!("设置 getImagePath 失败: {}", e))?;
+
+    println!("[ApiBridge]   ✓ 增强版剪贴板模块注入成功");
     Ok(())
 }
 

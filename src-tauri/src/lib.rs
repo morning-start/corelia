@@ -19,6 +19,7 @@ use tauri::{
     tray::TrayIconBuilder,
 };
 use std::path::PathBuf;
+use std::sync::{Mutex, RwLock};
 use services::WindowService;
 
 // 导入 QuickJS 运行时管理器
@@ -41,7 +42,6 @@ use plugins::registry::{
     PluginRegistry, search_plugins_by_prefix,
     get_active_plugins, get_plugin_state,
 };
-use std::sync::{Mutex, RwLock};
 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -51,9 +51,12 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
-        .manage(QuickJSRuntime::new())  // 注册 QuickJS 运行时管理器
+        .manage(QuickJSRuntime::new())  // 注册 QuickJS 运行时管理器（单例，供 Commands 直接使用）
         .manage(Mutex::new(PluginLoader::new(
             PathBuf::from("plugins"),
+            // 注意：Loader 内部会使用独立的 runtime 实例
+            // Commands 通过 State<QuickJSRuntime> 访问的实例与 Loader 内部的不同
+            // 这是已知限制，后续重构为 Arc 共享时可统一
             QuickJSRuntime::new()
         )))  // 注册插件加载器
         .manage(RwLock::new(PluginRegistry::new()))  // 注册插件注册表

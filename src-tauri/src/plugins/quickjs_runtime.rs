@@ -357,41 +357,43 @@ fn convert_value_to_json(value: Value) -> serde_json::Value {
     if value.is_null() || value.is_undefined() {
         return serde_json::Value::Null;
     }
-    
+
     if let Some(b) = value.as_bool() {
         return serde_json::Value::Bool(b);
     }
-    
+
     if let Some(i) = value.as_int() {
         return serde_json::Value::Number(serde_json::Number::from(i));
     }
-    
+
     if let Some(f) = value.as_float() {
         return serde_json::Value::Number(
             serde_json::Number::from_f64(f)
                 .unwrap_or_else(|| serde_json::Number::from(0))
         );
     }
-    
+
     // 处理字符串类型
     if let Some(s) = value.as_string() {
         return serde_json::Value::String(s.to_string().unwrap_or_default());
     }
-    
-    // 尝试转换为数组（会移动 value）
-    if let Some(arr) = value.into_array() {
-        return convert_array_to_json(arr);
-    }
-    
-    // 如果不是数组，尝试转换为对象（注意：此时 value 已经无效）
-    // 这种情况理论上不会发生，因为前面的检查应该已经覆盖了所有基本类型
-    // 但为了安全起见，返回 Null
-    serde_json::Value::Null
-}
 
-/// 将对象转换为 JSON（独立函数，避免所有权冲突）
-fn try_convert_object(value: Value) -> Option<serde_json::Value> {
-    value.into_object().map(convert_object_to_json)
+    // 先检查是否为数组（必须在 object 之前，因为数组也是对象）
+    if value.is_array() {
+        if let Some(arr) = value.clone().into_array() {
+            return convert_array_to_json(arr);
+        }
+    }
+
+    // 再尝试转换为普通对象
+    if value.is_object() {
+        if let Some(obj) = value.into_object() {
+            return convert_object_to_json(obj);
+        }
+    }
+
+    // 兜底
+    serde_json::Value::Null
 }
 
 /// 将数组转换为 JSON
