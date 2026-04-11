@@ -5,6 +5,7 @@ pub mod shell;
 pub mod store;
 pub mod autostart;
 pub mod config;
+pub mod plugin;
 
 // 配置管理命令导出 (用于 Tauri invoke_handler)
 #[allow(unused_imports)]

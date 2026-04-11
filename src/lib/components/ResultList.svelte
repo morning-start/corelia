@@ -1,11 +1,11 @@
 <script lang="ts">
-  import type { FilterResult } from 'fuzzy';
   import type { ExecutableItem } from '$lib/services/executor';
+  import type { ExtendedSearchResult } from '$lib/stores/search';
 
   /** 结果列表组件属性接口 */
   interface Props {
-    /** 搜索结果列表 */
-    results: FilterResult<ExecutableItem>[];
+    /** 搜索结果列表（支持系统内置项和插件结果） */
+    results: ExtendedSearchResult[];
     /** 当前选中的索引 */
     selectedIndex?: number;
     /** 是否显示搜索历史 */

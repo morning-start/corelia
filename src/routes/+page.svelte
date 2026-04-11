@@ -2,13 +2,16 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { LogicalSize } from "@tauri-apps/api/dpi";
+  import { WINDOW_CONFIG } from '$lib/config';
   import type { FilterResult } from 'fuzzy';
   import { theme } from '$lib/stores/theme';
   import { system } from '$lib/stores/system';
   import { user } from '$lib/stores/user';
   import { searchHistory } from '$lib/stores/history';
-  import { searchStore, type ExecutableItem } from '$lib/stores/search';
+  import { searchStore, type ExecutableItem, type ExtendedSearchResult } from '$lib/stores/search';
   import { resultExecutor } from '$lib/services/executor';
+  import { pluginService } from '$lib/plugins/service';
   import SearchBox from '$lib/components/SearchBox.svelte';
   import ResultList from '$lib/components/ResultList.svelte';
   import TitleBar from '$lib/components/TitleBar.svelte';
@@ -26,7 +29,7 @@
   /** 搜索查询词 */
   let queryValue = $state('');
   /** 搜索结果列表 */
-  let resultsValue = $state<FilterResult<ExecutableItem>[]>([]);
+  let resultsValue = $state<ExtendedSearchResult[]>([]);
   /** 搜索历史列表 */
   let historyItems = $state<string[]>([]);
   /** 当前选中的分类 */
@@ -47,6 +50,13 @@
    * 组件挂载时初始化
    */
   onMount(() => {
+    // 设置窗口尺寸（使用 LogicalSize 获得更好的 DPI 支持）
+    appWindow.setSize(new LogicalSize(WINDOW_CONFIG.WIDTH, WINDOW_CONFIG.HEIGHT)).catch(console.error);
+
+    // 设置最小和最大尺寸限制
+    appWindow.setMinSize(new LogicalSize(WINDOW_CONFIG.MIN_WIDTH, WINDOW_CONFIG.MIN_HEIGHT)).catch(console.error);
+    appWindow.setMaxSize(new LogicalSize(WINDOW_CONFIG.MAX_WIDTH, WINDOW_CONFIG.MAX_HEIGHT)).catch(console.error);
+
     // 加载系统配置和用户配置
     Promise.all([
       system.load(),
@@ -67,10 +77,24 @@
     // 初始化搜索历史
     searchHistory.init();
 
-    // 订阅搜索查询和结果
+    // 🔥 初始化插件系统（扫描并加载插件元数据）
+    pluginService.init().then((plugins) => {
+      console.log(`[+page] ✅ 插件系统初始化完成，发现 ${plugins.length} 个插件`);
+      plugins.forEach(p => console.log(`[+page]   - ${p.name}: ${p.description}`));
+    }).catch((e) => {
+      console.error('[+page] ❌ 插件系统初始化失败:', e);
+    });
+
+    // 订阅搜索查询
     unsubQuery = searchStore.query.subscribe(v => queryValue = v);
+
+    // 🔥 订阅合并后的搜索结果（包含系统项 + 插件项）
     unsubResults = searchStore.results.subscribe(v => {
-      resultsValue = selectedCategory === 'all' ? v : v.filter((r: any) => r.original.category === selectedCategory);
+      resultsValue = selectedCategory === 'all' ? v : v.filter((r: ExtendedSearchResult) => {
+        if (selectedCategory === 'plugin') return r.isPlugin === true;
+        if (selectedCategory === 'system') return r.isPlugin !== true;
+        return true; // 'all' 或 'history'
+      });
     });
     unsubHistory = searchHistory.subscribe(state => {
       historyItems = state.items.slice(0, 5).map(item => item.query);
@@ -205,8 +229,13 @@
    */
   function handleCategoryChange(category: 'all' | 'system' | 'plugin' | 'history') {
     selectedCategory = category;
+    // 立即重新过滤结果
     searchStore.results.subscribe(v => {
-      resultsValue = category === 'all' ? v : v.filter((r: any) => r.original.category === category);
+      resultsValue = category === 'all' ? v : v.filter((r: ExtendedSearchResult) => {
+        if (category === 'plugin') return r.isPlugin === true;
+        if (category === 'system') return r.isPlugin !== true;
+        return true; // 'all' 或 'history'
+      });
     });
   }
 </script>

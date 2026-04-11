@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { searchHistory } from '$lib/stores/history';
+import { pluginService } from '$lib/plugins/service';
 import type { SearchItem } from '$lib/search/fuzzy';
 
 /**
@@ -143,16 +144,99 @@ class ResultExecutor {
 
   /**
    * 执行插件功能
+   *
+   * 执行流程：
+   * 1. 从 item.target 获取插件 ID
+   * 2. 从 item.args[0] 获取动作名称（action）
+   * 3. 调用 pluginService.executeAction() 执行插件动作
+   * 4. 根据返回结果类型进行相应处理：
+   *    - type: 'text' → 显示文本消息（可复制到剪贴板或显示通知）
+   *    - type: 'error' → 显示错误信息
+   *    - 其他类型 → 记录日志
+   *
+   * @param item - 插件类型的搜索项（必须包含 target 和 args）
+   * @returns 执行结果
    */
   private async executePlugin(item: ExecutableItem): Promise<ExecutionResult> {
-    // TODO: 调用插件系统执行插件功能
-    console.log('执行插件:', item.target, item.args);
-
-    if (item.hideWindow !== false) {
-      await this.hideWindow();
+    if (!item.target) {
+      return { success: false, message: '无效的插件项：缺少 target (pluginId)' };
     }
 
-    return { success: true, message: `已执行插件: ${item.name}` };
+    const pluginId = item.target;
+    const action = item.args?.[0] || 'default';
+
+    console.log(`[Executor] 🚀 执行插件动作: ${pluginId}.${action}`);
+
+    try {
+      // 调用插件的动作执行方法
+      const actionResult = await pluginService.executeAction(pluginId, action);
+
+      console.log('[Executor] ✅ 插件执行返回:', actionResult);
+
+      // 处理不同类型的返回值
+      switch (actionResult.type) {
+        case 'text':
+          // 文本类型：显示消息并复制到剪贴板
+          if (actionResult.message) {
+            console.log('[Executor] 📝 插件返回文本:', actionResult.message);
+
+            // 尝试复制到剪贴板
+            try {
+              await invoke('write_clipboard', { text: actionResult.message });
+              console.log('[Executor] 📋 已复制到剪贴板');
+            } catch (clipboardError) {
+              console.warn('[Executor] ⚠️ 复制到剪贴板失败:', clipboardError);
+            }
+          }
+
+          if (item.hideWindow !== false) {
+            await this.hideWindow();
+          }
+
+          return {
+            success: true,
+            message: `✅ 插件 "${pluginId}" 执行成功${actionResult.message ? ': ' + actionResult.message.split('\n')[0] : ''}`
+          };
+
+        case 'error':
+          // 错误类型：记录错误并显示提示
+          console.error('[Executor] ❌ 插件返回错误:', actionResult.message);
+
+          if (item.hideWindow !== false) {
+            await this.hideWindow();
+          }
+
+          return {
+            success: false,
+            message: `❌ 插件错误: ${actionResult.message || '未知错误'}`
+          };
+
+        default:
+          // 其他类型：记录日志
+          console.log('[Executor] ℹ️ 插件返回未知类型:', actionResult);
+
+          if (item.hideWindow !== false) {
+            await this.hideWindow();
+          }
+
+          return {
+            success: true,
+            message: `✅ 插件 "${pluginId}" 执行完成`
+          };
+      }
+
+    } catch (e) {
+      console.error('[Executor] ❌ 插件执行异常:', e);
+
+      if (item.hideWindow !== false) {
+        await this.hideWindow();
+      }
+
+      return {
+        success: false,
+        message: `❌ 插件执行失败 (${pluginId}): ${e}`
+      };
+    }
   }
 
   /**

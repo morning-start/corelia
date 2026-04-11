@@ -2,6 +2,7 @@
 
 mod commands;
 mod error;
+mod plugins;
 mod services;
 
 // 导入配置命令到当前作用域
@@ -11,50 +12,37 @@ use commands::config::{
     load_app_config, save_app_config, clear_app_config,
 };
 
-use rquickjs::{Context, Runtime};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri::{
     menu::{Menu, MenuItem},
     image::Image,
     tray::TrayIconBuilder,
 };
+use std::path::PathBuf;
 use services::WindowService;
 
-static mut JS_RUNTIME: Option<Runtime> = None;
-static mut JS_CONTEXT: Option<Context> = None;
+// 导入 QuickJS 运行时管理器
+use plugins::quickjs_runtime::{
+    QuickJSRuntime, quickjs_create_vm, quickjs_destroy_vm, quickjs_execute,
+    quickjs_active_count, quickjs_cleanup,
+};
 
-/// 获取 JS 上下文（懒加载）
-fn get_js_context() -> Result<&'static Context, String> {
-    unsafe {
-        if JS_RUNTIME.is_none() {
-            let runtime = Runtime::new().map_err(|e| e.to_string())?;
-            let context = Context::full(&runtime).map_err(|e| e.to_string())?;
-            JS_RUNTIME = Some(runtime);
-            JS_CONTEXT = Some(context);
-        }
-        Ok(JS_CONTEXT.as_ref().unwrap())
-    }
-}
+// 导入 API 桥接层
+use plugins::api_bridge::inject_apis_to_vm;
 
-/// QuickJS 执行命令
-#[tauri::command]
-fn quickjs_execute(code: String) -> Result<String, String> {
-    let ctx = get_js_context()?;
-    let result = ctx.with(|ctx| {
-        ctx.eval::<String, _>(code.as_str())
-    });
-    match result {
-        Ok(value) => Ok(value),
-        Err(e) => Err(format!("JS Error: {:?}", e)),
-    }
-}
+// 导入插件加载器
+use plugins::loader::{
+    PluginLoader, scan_plugins, get_plugin_list, load_plugin, unload_plugin,
+    find_plugins_by_prefix,
+};
 
-/// QuickJS 初始化命令
-#[tauri::command]
-fn quickjs_init() -> Result<String, String> {
-    get_js_context()?;
-    Ok("QuickJS (rquickjs) initialized".to_string())
-}
+// 导入插件注册表
+use plugins::registry::{
+    PluginRegistry, search_plugins_by_prefix,
+    get_active_plugins, get_plugin_state,
+};
+use std::sync::{Mutex, RwLock};
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -63,7 +51,16 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
+        .manage(QuickJSRuntime::new())  // 注册 QuickJS 运行时管理器
+        .manage(Mutex::new(PluginLoader::new(
+            PathBuf::from("plugins"),
+            QuickJSRuntime::new()
+        )))  // 注册插件加载器
+        .manage(RwLock::new(PluginRegistry::new()))  // 注册插件注册表
         .setup(|app| {
+            // 初始化 API Bridge 的 AppHandle
+            plugins::api_bridge::set_app_handle(app.handle().clone());
+
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
@@ -120,9 +117,24 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // QuickJS
+            // QuickJS 运行时管理（VM 池化）
+            quickjs_create_vm,
+            quickjs_destroy_vm,
             quickjs_execute,
-            quickjs_init,
+            quickjs_active_count,
+            quickjs_cleanup,
+            // API 注入
+            inject_apis_to_vm,
+            // 插件加载器管理
+            scan_plugins,
+            get_plugin_list,
+            load_plugin,
+            unload_plugin,
+            find_plugins_by_prefix,
+            // 插件注册表查询
+            search_plugins_by_prefix,
+            get_active_plugins,
+            get_plugin_state,
             // 窗口管理
             commands::window::show_window,
             commands::window::hide_window,
@@ -158,6 +170,13 @@ pub fn run() {
             commands::shortcut::register_custom_shortcut,
             commands::shortcut::unregister_all_shortcuts,
             commands::shortcut::get_current_shortcut,
+            // 插件数据隔离存储
+            commands::plugin::get_plugin_data_path,
+            commands::plugin::read_plugin_data,
+            commands::plugin::write_plugin_data,
+            commands::plugin::delete_plugin_data,
+            commands::plugin::clear_plugin_data,
+            commands::plugin::get_plugin_data_size,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

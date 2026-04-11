@@ -13,18 +13,25 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: #1a1a1f;
+  background: transparent; /* 透明背景，由窗口容器控制背景色 */
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 确保 HTML/body 填满整个窗口 */
+  width: 100%;
+  height: 100%;
 }
 
 /* ==================== 窗口容器 ==================== */
 .window-container {
-  width: 720px;
-  min-height: 80px;
-  max-height: 600px;
+  /* 尺寸由 Svelte 通过 LogicalSize 控制，CSS 只负责布局 */
+  width: 100%;
+  height: 100%;
+  min-width: 200px;
+  min-height: 300px;
+  max-width: 1200px;
+  max-height: 900px;
   background: #1e1e24;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
