@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "code-optimizer": {
+      "source": "morning-start/dev-skills",
+      "sourceType": "github",
+      "computedHash": "b66aab045a6e5415d796bece94ac1d80c4a8c4807532f9e982b82c3c936c0b7b"
+    },
     "gstack": {
       "source": "garrytan/gstack",
       "sourceType": "github",
