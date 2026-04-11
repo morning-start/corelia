@@ -48,6 +48,15 @@ pub struct FeatureItem {
     pub icon: Option<String>,
 }
 
+/// 动态注册的功能（运行时由插件调用 registerPluginFeature 注册）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisteredFeature {
+    pub code: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub feature_type: String,
+}
+
 /// 插件运行时状态（状态机：MetaLoaded → Loading → Ready/Cached → Unloaded）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PluginState {
@@ -95,6 +104,12 @@ pub struct PluginInstance {
     pub loaded_at: Option<Instant>,
     /// 最后使用时间戳
     pub last_used: Option<Instant>,
+    /// 动态注册的功能列表（运行时由插件调用 registerPluginFeature 注册）
+    pub registered_features: Vec<RegisteredFeature>,
+    /// 插件就绪回调函数（JavaScript 函数引用）
+    pub on_ready_callback: Option<String>,
+    /// 插件退出回调函数（JavaScript 函数引用）
+    pub on_out_callback: Option<String>,
 }
 
 // ==================== 插件加载器核心实现 ====================
@@ -205,6 +220,9 @@ impl PluginLoader {
                         plugin_dir: path.clone(),
                         loaded_at: None,
                         last_used: None,
+                        registered_features: Vec::new(),
+                        on_ready_callback: None,
+                        on_out_callback: None,
                     };
 
                     // 8. 添加到 instances HashMap
@@ -390,8 +408,9 @@ impl PluginLoader {
 
         // 8. 注入 uTools API 到 VM
         let vm_id_for_inject = vm_id.clone();
+        let plugin_id = id.to_string();
         if let Err(e) = self.quickjs_runtime.with_context(&vm_id_for_inject, |ctx| {
-            crate::plugins::api_bridge::ApiBridge::inject_utools(&ctx)
+            crate::plugins::api_bridge::ApiBridge::inject_utools(&ctx, &plugin_id)
         }) {
             let _ = self.quickjs_runtime.destroy_vm(&vm_id);
             instance.vm_id = None;
