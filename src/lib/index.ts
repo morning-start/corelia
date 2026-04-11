@@ -1,20 +1,12 @@
 /**
  * Corelia 前端库统一导出
- *
- * 使用示例：
- * ```typescript
- * import { storeService, searchHistory, system, user } from '$lib';
- * ```
  */
 
-// Services - 服务层
-export { storeService } from './services/store';
-export type { StoreService } from './services/store';
+export { api } from './api';
 
 export { startupService } from './services/startup';
 export type { StartupService } from './services/startup';
 
-// Stores - 状态管理
 export { searchHistory } from './stores/history';
 export type { HistoryItem } from './stores/history';
 
@@ -22,14 +14,13 @@ export { system } from './stores/system';
 export type { SystemConfig } from './stores/system';
 
 export { user } from './stores/user';
-export type { UserConfig } from './stores/user';
 
 export { theme } from './stores/theme';
 export type { Theme } from './stores/theme';
 
-// Search - 搜索相关
+export type { UserConfig, AppConfig, SystemConfig as SystemConfigType } from './config';
+
 export type { SearchItem } from './search/fuzzy';
 
-// Utils - 工具函数
 export * from './utils/errors';
 export * from './utils/helpers';

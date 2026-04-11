@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { theme, type Theme } from '$lib/stores/theme';
   import { system, type SystemConfig } from '$lib/stores/system';
-  import { user, type UserConfig } from '$lib/stores/user';
+  import { user } from '$lib/stores/user';
+  import type { UserConfig } from '$lib/config';
   import { startupService } from '$lib/services/startup';
   import { shortcutService } from '$lib/services/shortcut';
   import ShortcutRecorder from '$lib/components/ShortcutRecorder.svelte';

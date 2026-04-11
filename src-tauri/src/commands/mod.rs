@@ -1,3 +1,7 @@
+//! 命令模块
+//!
+//! 提供 Tauri Command 接口
+
 pub mod window;
 pub mod shortcut;
 pub mod clipboard;

@@ -1,25 +1,10 @@
-import { invoke } from '@tauri-apps/api/core';
-
 /**
- * 在浏览器中打开 URL
- * @param url - 目标 URL
+ * Shell 服务
+ * @deprecated 请使用 api.shell 代替
  */
-export async function openUrl(url: string): Promise<void> {
-  await invoke('open_url', { url });
-}
 
-/**
- * 打开指定路径（文件或文件夹）
- * @param path - 目标路径
- */
-export async function openPath(path: string): Promise<void> {
-  await invoke('open_path', { path });
-}
+import { api } from '$lib/api';
 
-/**
- * 启动指定应用
- * @param app - 应用名称或路径
- */
-export async function openApp(app: string): Promise<void> {
-  await invoke('open_app', { app });
-}
+export const openUrl = (url: string) => api.shell.openUrl(url);
+export const openPath = (path: string) => api.shell.openPath(path);
+export const openApp = (app: string) => api.shell.openApp(app);
