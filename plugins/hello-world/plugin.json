@@ -1,1 +1,23 @@
-{"name": "hello-world", "version": "1.0.0", "type": "quickjs", "logo": "", "prefix": "hw", "description": "Hello World 探针插件，用于验证 Corelia 插件系统是否正常工作", "author": "Corelia Team", "main": "index.js", "patches": [], "features": [{"code": "greeting", "label": "问候功能", "type": "list", "items": [{"label": "👋 说 Hello", "action": "sayHello", "icon": "✨"}, {"label": "🌍 说 World", "action": "sayWorld", "icon": "🌏"}, {"label": "💾 测试存储", "action": "testStorage", "icon": "🧪"}]}]}
+{
+  "name": "hello-world",
+  "version": "1.0.0",
+  "type": "quickjs",
+  "logo": "",
+  "prefix": "hw",
+  "description": "Hello World 探针插件，用于验证 Corelia 插件系统是否正常工作",
+  "author": "Corelia Team",
+  "main": "index.js",
+  "patches": [],
+  "features": [
+    {
+      "code": "greeting",
+      "label": "问候功能",
+      "type": "list",
+      "items": [
+        { "label": "👋 说 Hello", "action": "sayHello", "icon": "✨" },
+        { "label": "🌍 说 World", "action": "sayWorld", "icon": "🌏" },
+        { "label": "💾 测试存储", "action": "testStorage", "icon": "🧪" }
+      ]
+    }
+  ]
+}
