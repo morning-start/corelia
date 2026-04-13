@@ -7,6 +7,7 @@
   import { startupService } from '$lib/services/startup';
   import { shortcutService } from '$lib/services/shortcut';
   import ShortcutRecorder from '$lib/components/ShortcutRecorder.svelte';
+  import PluginManager from '$lib/components/PluginManager.svelte';
 
   interface Props {
     /** 关闭面板回调函数 */
@@ -14,6 +15,9 @@
   }
 
   let { onClose }: Props = $props();
+
+  /** 当前激活的 Tab: 'general' | 'plugins' */
+  let activeTab = $state<'general' | 'plugins'>('general');
 
   /** 系统级配置状态（快捷键、开机启动等） */
   let systemConfig: SystemConfig = $state($system);
@@ -109,65 +113,93 @@
     </button>
   </div>
 
-  <div class="setting-content">
-    <section class="setting-section">
-      <h3>快捷键</h3>
-      <div class="setting-item">
-        <span class="setting-label">唤起窗口</span>
-        <ShortcutRecorder
-          value={systemConfig.shortcut.summon}
-          onChange={handleShortcutChange}
-        />
-      </div>
-    </section>
-
-    <section class="setting-section">
-      <h3>主题</h3>
-      <div class="theme-options">
-        <button
-          class="theme-btn"
-          class:active={$theme === 'dark'}
-          onclick={() => handleThemeChange('dark')}
-        >
-          深色
-        </button>
-        <button
-          class="theme-btn"
-          class:active={$theme === 'light'}
-          onclick={() => handleThemeChange('light')}
-        >
-          浅色
-        </button>
-        <button
-          class="theme-btn"
-          class:active={$theme === 'system'}
-          onclick={() => handleThemeChange('system')}
-        >
-          跟随系统
-        </button>
-      </div>
-    </section>
-
-    <section class="setting-section">
-      <h3>行为</h3>
-      <div class="setting-item">
-        <span class="setting-label">失焦自动隐藏</span>
-        <input
-          type="checkbox"
-          checked={userConfig.behavior.autoHide}
-          onchange={handleAutoHideChange}
-        />
-      </div>
-      <div class="setting-item">
-        <span class="setting-label">开机自启动</span>
-        <input
-          type="checkbox"
-          checked={startupEnabled}
-          onchange={handleStartupChange}
-        />
-      </div>
-    </section>
+  <!-- Tab 切换 -->
+  <div class="setting-tabs">
+    <button
+      class="tab-btn"
+      class:active={activeTab === 'general'}
+      onclick={() => activeTab = 'general'}
+    >
+      通用
+    </button>
+    <button
+      class="tab-btn"
+      class:active={activeTab === 'plugins'}
+      onclick={() => activeTab = 'plugins'}
+    >
+      插件管理
+    </button>
   </div>
+
+  <!-- 通用设置内容 -->
+  {#if activeTab === 'general'}
+    <div class="setting-content">
+      <section class="setting-section">
+        <h3>快捷键</h3>
+        <div class="setting-item">
+          <span class="setting-label">唤起窗口</span>
+          <ShortcutRecorder
+            value={systemConfig.shortcut.summon}
+            onChange={handleShortcutChange}
+          />
+        </div>
+      </section>
+
+      <section class="setting-section">
+        <h3>主题</h3>
+        <div class="theme-options">
+          <button
+            class="theme-btn"
+            class:active={$theme === 'dark'}
+            onclick={() => handleThemeChange('dark')}
+          >
+            深色
+          </button>
+          <button
+            class="theme-btn"
+            class:active={$theme === 'light'}
+            onclick={() => handleThemeChange('light')}
+          >
+            浅色
+          </button>
+          <button
+            class="theme-btn"
+            class:active={$theme === 'system'}
+            onclick={() => handleThemeChange('system')}
+          >
+            跟随系统
+          </button>
+        </div>
+      </section>
+
+      <section class="setting-section">
+        <h3>行为</h3>
+        <div class="setting-item">
+          <span class="setting-label">失焦自动隐藏</span>
+          <input
+            type="checkbox"
+            checked={userConfig.behavior.autoHide}
+            onchange={handleAutoHideChange}
+          />
+        </div>
+        <div class="setting-item">
+          <span class="setting-label">开机自启动</span>
+          <input
+            type="checkbox"
+            checked={startupEnabled}
+            onchange={handleStartupChange}
+          />
+        </div>
+      </section>
+    </div>
+  {/if}
+
+  <!-- 插件管理内容 -->
+  {#if activeTab === 'plugins'}
+    <div class="setting-content">
+      <PluginManager />
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -176,6 +208,38 @@
     flex-direction: column;
     height: 100%;
     padding: 16px;
+  }
+
+  .setting-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    padding: 4px;
+    background: var(--bg-hover);
+    border-radius: 10px;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .tab-btn:hover {
+    color: var(--text-color);
+  }
+
+  .tab-btn.active {
+    background: var(--bg-primary);
+    color: var(--text-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
   .setting-header {

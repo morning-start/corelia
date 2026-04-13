@@ -12,6 +12,7 @@
   import { searchStore, type ExecutableItem, type ExtendedSearchResult } from '$lib/stores/search';
   import { resultExecutor } from '$lib/services/executor';
   import { pluginService } from '$lib/plugins/service';
+  import { patchLoader } from '$lib/plugins/patch-loader';
   import SearchBox from '$lib/components/SearchBox.svelte';
   import ResultList from '$lib/components/ResultList.svelte';
   import TitleBar from '$lib/components/TitleBar.svelte';
@@ -81,6 +82,13 @@
     pluginService.init().then((plugins) => {
       console.log(`[+page] ✅ 插件系统初始化完成，发现 ${plugins.length} 个插件`);
       plugins.forEach(p => console.log(`[+page]   - ${p.name}: ${p.description}`));
+
+      // 🔥 初始化 WASM Patch 加载器（监听 Rust 的 WASM 加载请求）
+      patchLoader.init().then(() => {
+        console.log('[+page] ✅ WASM Patch 加载器初始化完成');
+      }).catch((e) => {
+        console.error('[+page] ❌ WASM Patch 加载器初始化失败:', e);
+      });
     }).catch((e) => {
       console.error('[+page] ❌ 插件系统初始化失败:', e);
     });
