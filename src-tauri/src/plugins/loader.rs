@@ -277,9 +277,6 @@ impl PluginLoader {
         if manifest.main.is_none() {
             manifest.main = Some("index.js".to_string());
         }
-        if manifest.patches.is_empty() {
-            manifest.patches = Vec::new();
-        }
         if manifest.features.is_none() {
             manifest.features = Some(Vec::new());
         }
@@ -430,6 +427,14 @@ impl PluginLoader {
         }
         println!("[PluginLoader] API 注入成功: {}", id);
 
+        // 9.5. 处理 WASM patches 依赖
+        // 先克隆需要的数据，避免与 instance 的可变借用冲突
+        let patches = instance.manifest.patches.clone();
+        let plugin_dir = instance.plugin_dir.clone();
+        if !patches.is_empty() {
+            Self::load_patches(id, &patches, &plugin_dir);
+        }
+
         // 10. 执行插件代码
         match self.quickjs_runtime.execute(&vm_id, &code) {
             Ok(_) => {
@@ -448,6 +453,89 @@ impl PluginLoader {
                 instance.state = PluginState::Error(format!("执行插件代码失败: {}", e));
 
                 Err(format!("执行插件代码失败: {}", e))
+            }
+        }
+    }
+
+    /// 加载插件的 WASM patches 依赖（关联函数，避免借用冲突）
+    ///
+    /// patches 位于插件目录的 `patches/` 子目录下，每个 patch 包含：
+    /// - `pkg/` 目录：wasm-pack 构建产物（*.wasm, *.js, *.d.ts）
+    /// - `src/` 目录：Rust 源码
+    ///
+    /// 加载流程：
+    /// 1. 验证 patch 目录和 pkg/ 目录是否存在
+    /// 2. 读取 patch 的 package.json 获取元数据
+    /// 3. 通过 Tauri event 通知前端加载 WASM 模块
+    /// 4. 前端在 WebView 中初始化 WebAssembly 并注册函数到 WasmBridge
+    fn load_patches(plugin_id: &str, patches: &[String], plugin_dir: &PathBuf) {
+        for patch_name in patches {
+            println!("[PluginLoader] 📦 加载 WASM patch: {} (插件: {})", patch_name, plugin_id);
+
+            // 1. 检查 patches 目录结构
+            let patch_dir = plugin_dir.join("patches").join(patch_name);
+            if !patch_dir.exists() {
+                eprintln!("[PluginLoader] ⚠️ patch 目录不存在: {}", patch_dir.display());
+                continue;
+            }
+
+            let pkg_dir = patch_dir.join("pkg");
+            if !pkg_dir.exists() {
+                eprintln!("[PluginLoader] ⚠️ patch pkg 目录不存在: {}", pkg_dir.display());
+                continue;
+            }
+
+            // 2. 检查关键文件
+            let wasm_file = pkg_dir.join(format!("{}_bg.wasm", patch_name));
+            let js_file = pkg_dir.join(format!("{}.js", patch_name));
+
+            if !wasm_file.exists() {
+                eprintln!("[PluginLoader] ⚠️ WASM 文件不存在: {}", wasm_file.display());
+                continue;
+            }
+            if !js_file.exists() {
+                eprintln!("[PluginLoader] ⚠️ JS 胶水文件不存在: {}", js_file.display());
+                continue;
+            }
+
+            // 3. 读取 package.json 获取导出函数信息（如果存在）
+            let pkg_json_path = pkg_dir.join("package.json");
+            let mut exported_functions: Vec<String> = Vec::new();
+
+            if pkg_json_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&pkg_json_path) {
+                    if let Ok(pkg_json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(exports) = pkg_json.get("exports") {
+                            if let Some(obj) = exports.as_object() {
+                                for key in obj.keys() {
+                                    if key != "." && !key.starts_with("./") {
+                                        exported_functions.push(key.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. 通过 Tauri event 通知前端加载 WASM
+            if let Some(app) = crate::plugins::api_bridge::get_app_handle() {
+                let payload = serde_json::json!({
+                    "pluginId": plugin_id,
+                    "patchName": patch_name,
+                    "patchDir": patch_dir.to_string_lossy().to_string(),
+                    "pkgDir": pkg_dir.to_string_lossy().to_string(),
+                    "wasmFile": wasm_file.to_string_lossy().to_string(),
+                    "jsFile": js_file.to_string_lossy().to_string(),
+                    "exportedFunctions": exported_functions,
+                });
+
+                match app.emit("wasm-load-patch", payload) {
+                    Ok(_) => println!("[PluginLoader] ✅ 已通知前端加载 patch: {}", patch_name),
+                    Err(e) => eprintln!("[PluginLoader] ❌ 通知前端加载 patch 失败: {}", e),
+                }
+            } else {
+                eprintln!("[PluginLoader] ⚠️ AppHandle 未初始化，无法通知前端加载 patch");
             }
         }
     }
