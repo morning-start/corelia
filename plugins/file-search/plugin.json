@@ -1,0 +1,23 @@
+{
+  "name": "file-search",
+  "version": "1.0.0",
+  "type": "quickjs",
+  "logo": "",
+  "prefix": "fs",
+  "description": "快速文件搜索插件，支持在常用目录中搜索文件",
+  "author": "Corelia Team",
+  "main": "index.js",
+  "patches": [],
+  "features": [
+    {
+      "code": "search",
+      "label": "文件搜索",
+      "type": "list",
+      "items": [
+        { "label": "🔍 搜索文档", "action": "search_docs", "icon": "📄" },
+        { "label": "🖼️ 搜索图片", "action": "search_images", "icon": "🖼️" },
+        { "label": "📦 搜索下载", "action": "search_downloads", "icon": "📥" }
+      ]
+    }
+  ]
+}
