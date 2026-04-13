@@ -1,677 +1,264 @@
-# Corelia 系统架构文档
+# 系统架构
 
-## 1. 概述
+> Corelia 是一个基于 Tauri 2.x + Svelte 5 + Rust 的快速启动器应用，采用三层架构设计。
 
-Corelia 是一个基于 Tauri v2 + Svelte 5 + Rust 的高性能快速启动器应用，采用前后端分离的架构设计。
+## 架构总览
 
-### 1.1 技术栈
+```
+┌─────────────────────────────────────────────────────────┐
+│                    WebView (前端)                         │
+│  ┌──────────┐  ┌──────────┐  ┌────────────────────────┐ │
+│  │ Svelte 5 │  │  Stores  │  │  PatchLoader (WASM)    │ │
+│  │   UI     │  │ (状态管理)│  │  WebAssembly 运行时    │ │
+│  └────┬─────┘  └────┬─────┘  └───────────┬────────────┘ │
+│       │              │                    │              │
+│       └──────────────┼────────────────────┘              │
+│                      │ invoke / listen / emit            │
+├──────────────────────┼───────────────────────────────────┤
+│                Tauri IPC Bridge                          │
+├──────────────────────┼───────────────────────────────────┤
+│                      │                                   │
+│  ┌───────────────────┴────────────────────────────────┐  │
+│  │              Rust 后端                               │  │
+│  │                                                      │  │
+│  │  ┌──────────────┐  ┌───────────────┐  ┌──────────┐ │  │
+│  │  │ QuickJS      │  │ PluginLoader  │  │ Commands │ │  │
+│  │  │ Runtime      │  │ (插件加载器)  │  │ (Tauri)  │ │  │
+│  │  └──────┬───────┘  └───────┬───────┘  └──────────┘ │  │
+│  │         │                  │                        │  │
+│  │  ┌──────┴───────┐  ┌──────┴──────┐  ┌───────────┐ │  │
+│  │  │ ApiBridge    │  │ Registry    │  │ Services  │ │  │
+│  │  │ (API桥接)    │  │ (注册表)    │  │ (系统服务)│ │  │
+│  │  └──────┬───────┘  └─────────────┘  └───────────┘ │  │
+│  │         │                                           │  │
+│  │  ┌──────┴───────┐                                   │  │
+│  │  │ WasmBridge   │                                   │  │
+│  │  │ (WASM桥接)   │                                   │  │
+│  │  └──────────────┘                                   │  │
+│  └─────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+```
 
-| 层级 | 技术 | 版本 | 说明 |
+## 技术栈
+
+| 层级 | 技术 | 版本 | 用途 |
 |------|------|------|------|
-| 前端框架 | SvelteKit | 2.x | 响应式 UI 框架 |
-| UI 语言 | TypeScript | ~5.6.2 | 类型安全 |
-| 打包工具 | Vite | 6.x | 快速构建 |
-| 包管理器 | Bun | 1.3+ | 快速依赖管理 |
-| 桌面框架 | Tauri | 2.x | 桌面应用框架 |
-| 后端语言 | Rust | 1.94.0 | 系统级编程 |
-| JS 引擎 | rquickjs | 0.11.0 | JavaScript 运行时 |
+| 前端框架 | SvelteKit | 2.x | UI 渲染与交互 |
+| UI 语言 | TypeScript | ~5.6.2 | 前端类型安全 |
+| 打包工具 | Vite | 6.x | 前端构建 |
+| 包管理器 | Bun | 1.3+ | 依赖管理 |
+| 桌面框架 | Tauri | 2.x | 跨平台桌面壳 |
+| 后端语言 | Rust | 1.94.0 | 核心逻辑 |
+| JS 引擎 | rquickjs | 0.11.0 | 插件沙箱运行时 |
 
-### 1.2 设计原则
-
-- **分层架构**: Commands 层 → Services 层 → 核心逻辑
-- **类型安全**: TypeScript + Rust 双重类型检查
-- **状态同步**: 全局状态管理，确保前后端一致
-- **性能优先**: Rust 后端 + 前端懒加载
-- **可维护性**: 模块化设计，清晰的职责划分
-
-## 2. 整体架构
+## 目录结构
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  用户界面层                          │
-│  ┌─────────────────────────────────────────────┐   │
-│  │           Svelte 5 Components               │   │
-│  │  (SearchBox, ResultList, CategoryTabs...)   │   │
-│  └─────────────────────────────────────────────┘   │
-└─────────────────┬───────────────────────────────────┘
-                  │
-┌─────────────────▼───────────────────────────────────┐
-│                  状态管理层                          │
-│  ┌──────────────┐  ┌──────────────┐                │
-│  │   Stores     │  │   Services   │                │
-│  │ (system,user)│  │(executor,...)│                │
-│  └──────────────┘  └──────────────┘                │
-└─────────────────┬───────────────────────────────────┘
-                  │ Tauri Commands (invoke)
-┌─────────────────▼───────────────────────────────────┐
-│               命令层 (Commands)                      │
-│  ┌──────┬──────┬──────┬──────┬──────┬──────┐      │
-│  │Window│Config│Store │Shell │Auto  │Short │      │
-│  └──────┴──────┴──────┴──────┴──────┴──────┘      │
-└─────────────────┬───────────────────────────────────┘
-                  │
-┌─────────────────▼───────────────────────────────────┐
-│               服务层 (Services)                      │
-│  ┌──────┬──────┬──────┬──────┬──────┬──────┐      │
-│  │Window│Config│Store │Shell │Auto  │Clip  │      │
-│  └────────────┴────────────┴────────────┘      │
-└─────────────────┬───────────────────────────────────┘
-                  │
-┌─────────────────▼───────────────────────────────────┐
-│               插件层 (Plugins)                       │
-│  ┌──────────┬──────────┬──────────┬──────────┐    │
-│  │ Opener   │ Shortcut │  Store   │AutoStart │    │
-│  └──────────┴──────────┴──────────┴──────────┘    │
-└─────────────────────────────────────────────────────┘
+corelia/
+├── src/                        # 前端 (SvelteKit)
+│   ├── lib/
+│   │   ├── components/         # Svelte 组件
+│   │   │   ├── SearchBox.svelte      # 搜索输入框
+│   │   │   ├── ResultList.svelte     # 结果列表
+│   │   │   ├── SettingPanel.svelte   # 设置面板
+│   │   │   ├── PluginManager.svelte  # 插件管理器
+│   │   │   ├── CategoryTabs.svelte   # 分类标签
+│   │   │   ├── TitleBar.svelte       # 标题栏
+│   │   │   ├── ShortcutRecorder.svelte # 快捷键录制
+│   │   │   └── HighlightedText.svelte  # 高亮文本
+│   │   ├── plugins/            # 插件前端层
+│   │   │   ├── types.ts        # 全局类型定义
+│   │   │   ├── patch-loader.ts # WASM Patch 加载器
+│   │   │   └── service.ts      # 插件服务
+│   │   ├── stores/             # Svelte stores
+│   │   ├── services/           # 前端服务
+│   │   ├── search/             # 搜索引擎
+│   │   ├── styles/             # CSS 样式
+│   │   ├── api.ts              # Tauri API 代理
+│   │   └── config.ts           # 前端配置
+│   └── routes/
+│       ├── +page.svelte        # 主页面
+│       └── +layout.ts          # 布局
+├── src-tauri/                  # Rust 后端
+│   └── src/
+│       ├── lib.rs              # 应用入口与 Command 注册
+│       ├── plugins/            # 插件系统核心
+│       │   ├── quickjs_runtime.rs  # QuickJS VM 池
+│       │   ├── api_bridge.rs   # API 桥接层
+│       │   ├── loader.rs       # 插件加载器
+│       │   ├── registry.rs     # 插件注册表
+│       │   └── wasm_bridge.rs  # WASM 桥接
+│       ├── commands/           # Tauri Commands
+│       └── services/           # 业务服务
+└── plugins/                    # 插件目录
+    └── file-search/            # 示例插件
 ```
 
-## 3. 前端架构
+## 核心模块
 
-### 3.1 目录结构
+### 1. QuickJS Runtime (`quickjs_runtime.rs`)
 
+QuickJS VM 池化管理器，负责插件 JavaScript 代码的沙箱执行。
+
+**核心结构**：
+- `QuickJSConfig` — 运行时配置（内存限制、超时时间、VM 上限）
+- `VmInstance` — VM 实例（Runtime + Context + 闲置追踪）
+- `QuickJSRuntime` — VM 池管理器
+
+**关键参数**：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| max_memory_bytes | 50MB | 单个 VM 最大内存 |
+| max_execution_time_ms | 5000 | 执行超时 |
+| max_vm_count | 10 | 最大并发 VM |
+| idle_timeout_secs | 300 | 闲置超时 |
+
+**线程安全**：通过 `unsafe impl Send/Sync` + `RefCell` 保证主线程安全访问。
+
+### 2. API Bridge (`api_bridge.rs`)
+
+将 Rust 能力注入 QuickJS VM，实现 `window.utools` 兼容层。
+
+**注入的 API 模块**：
+
+| 模块 | 方法 | 说明 |
+|------|------|------|
+| `dbStorage` | getItem / setItem / removeItem / getAll | 插件隔离存储 |
+| `clipboard` | readText / writeText / copyText | 剪贴板操作 |
+| `shell` | openPath / openExternal / showItemInFolder / beep | Shell 操作 |
+| 窗口 | hideMainWindow / showMainWindow | 窗口控制 |
+| `getPath` | getPath(name) | 系统路径获取 |
+| `showNotification` | showNotification(title, body) | 系统通知 |
+| `fs` | readTextFile / writeTextFile / exists / isDir | 文件系统 |
+| `fetch` | fetch(url, options) | HTTP 请求 (ureq) |
+| `dialog` | showOpenDialog / showSaveDialog / showMessageBox | 对话框 |
+| `process` | exec / getNativeId / getAppName / getAppVersion | 子进程 |
+| `wasm` | __wasm_call / __wasm_get_result / __wasm_available / __wasm_has | WASM 桥接 |
+
+**设计要点**：
+- 使用 `OnceLock<AppHandle>` 全局持有 Tauri AppHandle
+- `require_app!` 宏统一处理 AppHandle 获取
+- QuickJS 回调中**最小化锁范围**，避免死锁
+
+### 3. Plugin Loader (`loader.rs`)
+
+插件生命周期管理器，负责扫描、解析、加载、卸载插件。
+
+**状态机**：
 ```
-src/
-├── routes/
-│   └── +page.svelte          # 主页面
-├── lib/
-│   ├── components/           # UI 组件
-│   │   ├── SearchBox.svelte
-│   │   ├── ResultList.svelte
-│   │   ├── CategoryTabs.svelte
-│   │   ├── TitleBar.svelte
-│   │   ├── SettingPanel.svelte
-│   │   └── ShortcutRecorder.svelte
-│   ├── stores/              # 状态管理
-│   │   ├── system.ts        # 系统配置
-│   │   ├── user.ts          # 用户配置
-│   │   ├── theme.ts         # 主题
-│   │   ├── search.ts        # 搜索状态
-│   │   └── history.ts       # 搜索历史
-│   ├── services/            # 前端服务
-│   │   ├── executor.ts      # 执行器
-│   │   ├── shortcut.ts      # 快捷键
-│   │   ├── shell.ts         # Shell 操作
-│   │   └── clipboard.ts     # 剪贴板
-│   ├── search/              # 搜索相关
-│   │   ├── fuzzy.ts         # 模糊搜索
-│   │   └── performance.ts   # 性能优化
-│   ├── styles/              # 样式
-│   │   └── themes.css
-│   ├── config.ts            # 全局配置
-│   └── utils/               # 工具函数
-└── app.html                 # HTML 模板
-```
-
-### 3.2 组件层级
-
-```
-+page.svelte (主页面)
-├── TitleBar                  # 标题栏
-│   └── 拖拽区域 + 设置按钮
-├── SearchBox                 # 搜索框
-│   └── 输入框 + 清除按钮
-├── CategoryTabs              # 分类标签
-│   └── 全部/系统/插件/历史
-├── ResultList                # 结果列表
-│   ├── 历史记录模式
-│   └── 搜索结果模式
-└── SettingPanel              # 设置面板
-    └── ShortcutRecorder      # 快捷键录制组件
-```
-
-### 3.3 状态管理
-
-#### Stores 层次结构
-
-```typescript
-// 系统配置 (只读)
-system: {
-  shortcut: { summon: string, enabled: boolean },
-  startup: { minimizeToTray: boolean }
-}
-
-// 用户配置 (可写)
-user: {
-  behavior: { autoHide: boolean, autoHideDelay: number },
-  theme: 'dark' | 'light' | 'system'
-}
-
-// 搜索状态
-searchStore: {
-  query: string,
-  results: FilterResult[],
-  category: 'all' | 'system' | 'plugin' | 'history'
-}
-
-// 搜索历史
-searchHistory: {
-  items: Array<{ query: string, timestamp: number }>
-}
+MetaLoaded ──→ Loading ──→ Ready
+    ↑              │          │
+    │              ↓          ↓
+    └── Unloaded ←─── Cached / Error
 ```
 
-#### 状态同步机制
+**加载流程**：
+1. `scan_plugins()` — 扫描目录，解析 `plugin.json`，状态置 `MetaLoaded`
+2. `load_plugin(id)` — 创建 VM → 注入 API → 加载 patches → 执行代码 → 状态置 `Ready`
+3. `unload_plugin(id)` — 销毁 VM → 状态置 `Unloaded`
 
-```typescript
-// 前端订阅配置变化
-unsubSystem = system.subscribe((s) => {
-  systemConfigSnapshot = { ...s.shortcut, ...s.startup };
-});
+### 4. Plugin Registry (`registry.rs`)
 
-// 后端更新配置
-await invoke('save_system_config', { config: newConfig });
+线程安全的插件注册表，使用 `RwLock` 实现多读单写。
 
-// 前端重新加载
-await system.load();
+**双重索引**：
+- `by_id: HashMap<String, usize>` — ID 精确查找
+- `by_prefix: HashMap<String, Vec<usize>>` — 前缀模糊搜索
+
+**状态机校验**：`update_state()` 执行合法性校验，拒绝非法状态转换。
+
+### 5. WASM Bridge (`wasm_bridge.rs`)
+
+QuickJS VM ↔ WebView WASM 的 IPC 桥接层。
+
+**调用链路**：
+```
+QuickJS VM (插件代码)
+    │
+    ├── utools.wasm.__wasm_call("crypto.sha256", '"hello"')
+    │       ├── 1. 获取 WasmBridge 锁，检查函数是否存在 → 释放锁
+    │       ├── 2. 生成唯一 requestId (AtomicU64)
+    │       └── 3. emit("wasm-call", payload) → 返回 requestId
+    │
+    ├── Rust → WebView (Tauri Event)
+    │       └── PatchLoader.handleWasmCall()
+    │               ├── 执行 WebAssembly 函数
+    │               └── invoke("wasm_store_call_result") → 存入 WasmBridge
+    │
+    └── utools.wasm.__wasm_get_result(requestId)
+            └── 轮询获取结果 (JSON 字符串或 null)
 ```
 
-### 3.4 搜索流程
+**结果缓存**：`call_results: HashMap<String, WasmCallResultEntry>`，获取后自动移除，超 1000 条时淘汰最旧的 500 条。
+
+## 数据流
+
+### 搜索流程
 
 ```
-用户输入
-    ↓
-SearchBox.onInput()
-    ↓
-searchStore.setQuery(query)
-    ↓
-fuzzySearch(query, items)
-    ↓
-更新 searchStore.results
-    ↓
-ResultList 渲染列表
-    ↓
-用户选择
-    ↓
-executeItem(item)
-    ↓
-invoke('open_app' | 'open_url' | ...)
-    ↓
-invoke('hide_window')
+用户输入 → SearchBox → searchStore.setQuery()
+                            │
+                    ┌───────┼───────┐
+                    ↓       ↓       ↓
+              系统搜索  插件搜索  历史记录
+              (fuzzy)  (prefix)  (history)
+                    │       │       │
+                    └───────┼───────┘
+                            ↓
+                    合并结果 → ResultList
+                            ↓
+                    用户选择 → resultExecutor.execute()
 ```
 
-## 4. 后端架构
-
-### 4.1 目录结构
+### 插件加载流程
 
 ```
-src-tauri/src/
-├── main.rs                  # Rust 入口 (仅调用 lib.rs)
-├── lib.rs                   # 应用入口 (组装模块)
-├── error.rs                 # 错误处理
-├── commands/                # 命令层
-│   ├── mod.rs
-│   ├── window.rs           # 窗口控制命令
-│   ├── config/             # 配置管理命令
-│   │   ├── mod.rs
-│   │   ├── system.rs
-│   │   ├── user.rs
-│   │   └── app.rs
-│   ├── store.rs            # 数据存储命令
-│   ├── shell.rs            # Shell 操作命令
-│   ├── autostart.rs        # 自启动命令
-│   └── shortcut.rs         # 快捷键命令
-└── services/                # 服务层
-    ├── mod.rs
-    ├── window_service.rs   # 窗口服务
-    ├── config_service.rs   # 配置服务
-    ├── store_service.rs    # 存储服务
-    ├── shell_service.rs    # Shell 服务
-    ├── autostart_service.rs # 自启动服务
-    └── clipboard_service.rs # 剪贴板服务
+前端 init()
+    │
+    ├── pluginService.init()
+    │       └── invoke('scan_plugins') → Rust PluginLoader.scan_plugins()
+    │
+    └── patchLoader.init()
+            ├── listen('wasm-load-patch') → 等待 Rust 通知加载 WASM
+            └── listen('wasm-call') → 等待 QuickJS 调用 WASM
+
+用户触发插件
+    │
+    └── invoke('load_plugin') → Rust PluginLoader.load_plugin()
+            ├── create_vm() → QuickJSRuntime
+            ├── inject_utools() → ApiBridge
+            ├── load_patches() → emit("wasm-load-patch") → WebView PatchLoader
+            └── execute(code) → QuickJS 执行插件代码
 ```
 
-### 4.2 分层设计
-
-#### Commands 层 (薄封装)
-
-```rust
-// src-tauri/src/commands/window.rs
-#[tauri::command]
-pub async fn toggle_window(app: AppHandle) -> Result<bool, String> {
-    // 仅调用服务层，无业务逻辑
-    WindowService::toggle(&app)
-}
-
-#[tauri::command]
-pub async fn hide_window(app: AppHandle) -> Result<(), String> {
-    WindowService::hide(&app)
-}
-```
-
-**职责**:
-- 参数验证
-- 错误转换
-- 命令封装
-
-#### Services 层 (业务逻辑)
-
-```rust
-// src-tauri/src/services/window_service.rs
-pub struct WindowService;
-
-impl WindowService {
-    // 全局状态
-    static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
-    
-    // 业务逻辑
-    pub fn toggle(app: &AppHandle) -> Result<bool, String> {
-        let visible = Self::is_window_visible();
-        let new_visible = !visible;
-        
-        if visible {
-            Self::hide(app)?;
-        } else {
-            Self::show(app)?;
-        }
-        
-        Ok(new_visible)
-    }
-    
-    fn show(app: &AppHandle) -> Result<(), String> {
-        // 显示窗口逻辑
-    }
-    
-    fn hide(app: &AppHandle) -> Result<(), String> {
-        // 隐藏窗口逻辑
-    }
-}
-```
-
-**职责**:
-- 业务逻辑实现
-- 状态管理
-- 错误处理
-
-### 4.3 全局状态管理
-
-#### 窗口可见状态
-
-```rust
-use std::sync::atomic::{AtomicBool, Ordering};
-
-// 线程安全的全局状态
-static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
-
-// 读取状态
-fn is_window_visible() -> bool {
-    WINDOW_VISIBLE.load(Ordering::SeqCst)
-}
-
-// 写入状态
-fn set_window_visible(visible: bool) {
-    WINDOW_VISIBLE.store(visible, Ordering::SeqCst);
-}
-```
-
-**为什么使用 AtomicBool?**
-- 线程安全，无需 Mutex
-- 高性能，无锁操作
-- 适合简单的布尔状态
-
-#### 状态同步流程
-
-```
-托盘点击 → toggle() → WINDOW_VISIBLE 取反
-                          ↓
-                    show() / hide()
-                          ↓
-                    更新窗口实际状态
-                          ↓
-                    前端焦点监听
-                          ↓
-                    失焦自动隐藏
-```
-
-### 4.4 配置管理
-
-#### 三层配置结构
-
-```rust
-// SystemConfig - 系统级配置
-struct SystemConfig {
-    shortcut: ShortcutConfig,
-    startup: StartupConfig,
-}
-
-// UserConfig - 用户偏好
-struct UserConfig {
-    behavior: BehaviorConfig,
-    theme: ThemeConfig,
-}
-
-// AppConfig - 应用数据
-struct AppConfig {
-    // 存储内容
-}
-```
-
-#### 存储路径
-
-```
-$APPDATA/
-└── com.morningstart.corelia/
-    ├── system.json         # 系统配置
-    ├── user.json           # 用户配置
-    └── store.json          # 应用数据
-```
-
-## 5. 数据流
-
-### 5.1 配置加载流程
-
-```
-应用启动
-    ↓
-lib.rs:setup()
-    ↓
-WindowService::init_state()
-    ↓
-前端 onMount()
-    ↓
-Promise.all([system.load(), user.load()])
-    ↓
-invoke('load_system_config')
-    ↓
-ConfigService::load_system()
-    ↓
-读取 system.json
-    ↓
-返回前端
-    ↓
-更新 system store
-    ↓
-订阅者收到通知
-    ↓
-UI 更新
-```
-
-### 5.2 搜索执行流程
-
-```
-用户输入 "calc"
-    ↓
-SearchBox → handleInput()
-    ↓
-searchStore.setQuery("calc")
-    ↓
-fuzzySearch("calc", executables)
-    ↓
-返回匹配结果
-    ↓
-ResultList 渲染
-    ↓
-用户点击 "计算器"
-    ↓
-executeItem(item)
-    ↓
-invoke('open_app', { app: "calc" })
-    ↓
-ShellService::open_app()
-    ↓
-std::process::Command::new("calc")
-    ↓
-invoke('hide_window')
-    ↓
-WindowService::hide()
-    ↓
-窗口隐藏
-```
-
-## 6. 关键特性实现
-
-### 6.1 DPI 适配
-
-**问题**: 高 DPI 屏幕上窗口尺寸不一致
-
-**解决方案**: 使用 LogicalSize
-
-```typescript
-// 前端设置窗口尺寸
-import { LogicalSize } from "@tauri-apps/api/dpi";
-
-appWindow.setSize(new LogicalSize(
-  WINDOW_CONFIG.WIDTH,   // 600 逻辑像素
-  WINDOW_CONFIG.HEIGHT   // 420 逻辑像素
-));
-```
-
-**效果**:
-- 100% DPI: 600×420 物理像素
-- 200% DPI: 1200×840 物理像素
-- 显示大小一致，清晰度更高
-
-### 6.2 透明窗口与圆角
-
-**配置**:
-```json
-{
-  "app": {
-    "windows": [{
-      "decorations": false,
-      "transparent": true,
-      "alwaysOnTop": true
-    }]
-  }
-}
-```
-
-**CSS**:
-```css
-.window-container {
-  width: 100%;
-  height: 100%;
-  background: #1e1e24;
-  border-radius: 14px;
-}
-
-html, body {
-  background: transparent;
-}
-```
-
-**层级**:
-```
-系统背景 (透明)
-  └─ Tauri 窗口 (圆角透明)
-      └─ HTML/Body (透明)
-          └─ .window-container (圆角深色)
-```
-
-### 6.3 失焦自动隐藏
-
-**前端监听**:
-```typescript
-const unlistenFocus = appWindow.onFocusChanged(
-  async ({ payload: focused }) => {
-    if (!focused && userConfigSnapshot.autoHide) {
-      await invoke('hide_window');
-    }
-  }
-);
-```
-
-**后端处理**:
-```rust
-pub fn hide(app: &AppHandle) -> Result<(), String> {
-    let window = app.get_webview_window("main")?;
-    window.hide()?;
-    Self::set_window_visible(false);
-    Ok(())
-}
-```
-
-### 6.4 全局快捷键
-
-**注册流程**:
-```rust
-// src-tauri/src/commands/shortcut.rs
-#[tauri::command]
-pub fn register_shortcut_cmd(app: AppHandle) -> Result<(), String> {
-    let shortcut = "Alt+Space"; // 从配置读取
-    
-    ShortcutManager::register(&app, shortcut, || {
-        WindowService::toggle(&app)?;
-        Ok(())
-    })
-}
-```
-
-**前端调用**:
-```typescript
-await invoke("register_shortcut_cmd");
-```
-
-## 7. 性能优化
-
-### 7.1 前端优化
-
-- **懒加载**: 组件按需加载
-- **虚拟滚动**: 大量结果时启用
-- **防抖搜索**: 150ms 延迟，减少计算
-- **缓存结果**: 避免重复搜索
-
-### 7.2 后端优化
-
-- **线程池**: 异步处理耗时操作
-- **缓存配置**: 避免重复读取文件
-- **原子操作**: AtomicBool 替代 Mutex
-- **延迟取消置顶**: 100ms 后取消置顶
-
-### 7.3 启动优化
-
-```
-目标：热启动 < 0.5 秒
-
-优化措施:
-- Rust 后端预编译
-- 前端代码分割
-- 最小化初始加载
-- 懒加载非关键组件
-```
-
-## 8. 安全考虑
-
-### 8.1 权限控制
-
-```json
-{
-  "identifier": "main-capability",
-  "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "shell:allow-open",
-    "global-shortcut:default"
-  ]
-}
-```
-
-### 8.2 输入验证
-
-```rust
-// 命令参数验证
-pub fn open_app(app: String) -> Result<(), String> {
-    // 验证应用名是否合法
-    if app.contains("..") || app.contains("/") {
-        return Err("Invalid app name".to_string());
-    }
-    // ...
-}
-```
-
-### 8.3 错误处理
-
-```rust
-// 统一错误类型
-pub enum AppError {
-    ConfigNotFound,
-    InvalidParameter(String),
-    InternalError(String),
-}
-
-// 所有命令返回 Result<T, String>
-#[tauri::command]
-pub fn some_command() -> Result<String, String> {
-    // 错误处理
-}
-```
-
-## 9. 测试策略
-
-### 9.1 单元测试
-
-```rust
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_window_service_toggle() {
-        // 测试窗口切换逻辑
-    }
-}
-```
-
-### 9.2 集成测试
-
-```typescript
-// 测试配置加载
-describe('ConfigService', () => {
-  it('should load system config', async () => {
-    const config = await system.load();
-    expect(config).toBeDefined();
-  });
-});
-```
-
-### 9.3 E2E 测试
-
-```typescript
-// 测试完整搜索流程
-test('search and open app', async () => {
-  await page.fill('input', 'calc');
-  await page.click('.result-item');
-  // 验证计算器是否打开
-});
-```
-
-## 10. 扩展性设计
-
-### 10.1 插件系统
-
-```rust
-// 未来扩展：插件 API
-pub trait Plugin {
-    fn name(&self) -> &str;
-    fn execute(&self, args: &[String]) -> Result<(), String>;
-}
-
-// 插件注册
-pub fn register_plugin(plugin: Box<dyn Plugin>) {
-    // ...
-}
-```
-
-### 10.2 自定义命令
-
-```typescript
-// 未来扩展：用户自定义命令
-interface CustomCommand {
-  name: string;
-  script: string;
-  shortcut?: string;
-}
-```
-
-## 11. 总结
-
-Corelia 采用现代化的技术栈和清晰的架构设计：
-
-- **前后端分离**: 清晰的职责划分
-- **分层架构**: Commands → Services → Core
-- **类型安全**: TypeScript + Rust
-- **性能优先**: Rust 后端 + 前端优化
-- **可维护性**: 模块化、可扩展
-
-这种架构确保了应用的高性能、可维护性和可扩展性。
-
----
-
-**最后更新**: 2026-04-10  
-**版本**: v0.1.0
+## 状态管理
+
+### 前端 Stores (Svelte 5)
+
+| Store | 文件 | 用途 |
+|-------|------|------|
+| `searchStore` | search.ts | 搜索查询与结果 |
+| `theme` | theme.ts | 主题 (dark/light/system) |
+| `system` | system.ts | 系统配置 (快捷键/启动) |
+| `user` | user.ts | 用户配置 (行为/外观) |
+| `searchHistory` | history.ts | 搜索历史 |
+| `app` | app.ts | 应用全局状态 |
+
+### Rust 状态 (Tauri Managed)
+
+| State | 类型 | 用途 |
+|-------|------|------|
+| `QuickJSRuntime` | 直接 | VM 池管理 |
+| `PluginLoader` | `Mutex<>` | 插件加载器 |
+| `PluginRegistry` | `RwLock<>` | 插件注册表 |
+| `WasmBridge` | `Mutex<>` | WASM 桥接注册表 |
+
+## 关键设计决策
+
+1. **QuickJS 而非 V8** — 更轻量，内存占用低，适合沙箱化插件执行
+2. **VM 池化** — 每个插件独立 VM，支持闲置回收，控制资源上限
+3. **WASM IPC 桥接** — QuickJS 无法直接运行 WASM，通过 IPC 转发到 WebView 执行
+4. **轮询式结果获取** — QuickJS 同步执行模型下，`__wasm_get_result` 轮询获取异步结果
+5. **分层配置** — 系统配置 / 用户配置 / 应用配置三层分离
+6. **透明窗口** — `decorations: false, transparent: true`，手动处理焦点管理
