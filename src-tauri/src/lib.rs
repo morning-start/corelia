@@ -43,6 +43,13 @@ use plugins::registry::{
     get_active_plugins, get_plugin_state,
 };
 
+// 导入 WASM 桥接层
+use plugins::wasm_bridge::{
+    WasmBridge, wasm_register_functions, wasm_unregister_patch,
+    wasm_list_functions, wasm_is_patch_loaded, wasm_call_function,
+    wasm_store_call_result, wasm_get_call_result,
+};
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -50,6 +57,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .manage(QuickJSRuntime::new())  // 注册 QuickJS 运行时管理器（单例，供 Commands 直接使用）
         .manage(Mutex::new(PluginLoader::new(
@@ -60,6 +68,7 @@ pub fn run() {
             QuickJSRuntime::new()
         )))  // 注册插件加载器
         .manage(RwLock::new(PluginRegistry::new()))  // 注册插件注册表
+        .manage(Mutex::new(WasmBridge::new()))  // 注册 WASM 桥接
         .setup(|app| {
             // 初始化 API Bridge 的 AppHandle
             plugins::api_bridge::set_app_handle(app.handle().clone());
@@ -128,6 +137,14 @@ pub fn run() {
             quickjs_cleanup,
             // API 注入
             inject_apis_to_vm,
+            // WASM 桥接
+            wasm_register_functions,
+            wasm_unregister_patch,
+            wasm_list_functions,
+            wasm_is_patch_loaded,
+            wasm_call_function,
+            wasm_store_call_result,
+            wasm_get_call_result,
             // 插件加载器管理
             scan_plugins,
             get_plugin_list,
