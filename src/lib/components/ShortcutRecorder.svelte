@@ -114,7 +114,7 @@
 
   /** 判断当前值是否为预设选项 */
   function isPreset(value: string | undefined): value is typeof PRESET_SHORTCUTS[number] {
-    return PRESET_SHORTCUTS.includes(value as any);
+    return PRESET_SHORTCUTS.includes(value as (typeof PRESET_SHORTCUTS)[number]);
   }
 </script>
 

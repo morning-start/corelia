@@ -126,17 +126,19 @@ class ResultExecutor {
   private async recordToHistory(item: ExecutableItem): Promise<void> {
     searchHistory.add(item.name);
   }
-
-  createExecutable(
-    item: SearchItem,
-    type: ExecutableItem['type'],
-    target: string,
-    options?: { args?: string[]; hideWindow?: boolean }
-  ): ExecutableItem {
-    return { ...item, type, target, args: options?.args, hideWindow: options?.hideWindow };
-  }
 }
 
+/** 创建可执行项（供外部/插件使用） */
+export function createExecutable(
+  item: SearchItem,
+  type: ExecutableItem['type'],
+  target: string,
+  options?: { args?: string[]; hideWindow?: boolean }
+): ExecutableItem {
+  return { ...item, type, target, args: options?.args, hideWindow: options?.hideWindow };
+}
+
+/** 系统内置项工厂 */
 export function createSystemItems(): ExecutableItem[] {
   return [
     { id: 'system-settings', name: '设置', description: '打开系统设置', category: '系统', type: 'setting', target: 'general', hideWindow: false },
