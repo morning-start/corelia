@@ -32,13 +32,10 @@ html, body {
   min-height: 300px;
   max-width: 1200px;
   max-height: 900px;
-  background: #1e1e24;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.3),
-    0 25px 50px -12px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--window-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -56,8 +53,9 @@ main {
   flex-direction: column;
 }
 
-/* ==================== 设计令牌 ==================== */
-:root {
+/* ==================== 设计令牌 - 深色主题（默认） ==================== */
+:root,
+:root[data-theme="dark"] {
   /* 背景层级 - 高对比度 */
   --bg-primary: #1e1e24;
   --bg-secondary: #25252c;
@@ -88,6 +86,16 @@ main {
   --border-default: rgba(255, 255, 255, 0.1);
   --border-focus: rgba(99, 102, 241, 0.5);
 
+  /* 窗口阴影 */
+  --window-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 25px 50px -12px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+
+  /* 滚动条 */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+
   /* 间距 */
   --space-1: 4px;
   --space-2: 8px;
@@ -107,6 +115,59 @@ main {
   --font-size-lg: 18px;
 }
 
+/* ==================== 设计令牌 - 浅色主题 ==================== */
+:root[data-theme="light"] {
+  /* 背景层级 */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fb;
+  --bg-tertiary: #eef1f4;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.07);
+  --bg-selected: rgba(99, 102, 241, 0.1);
+
+  /* 文字层级 */
+  --text-primary: #1a1a2e;
+  --text-secondary: rgba(26, 26, 46, 0.7);
+  --text-tertiary: rgba(26, 26, 46, 0.45);
+  --text-muted: rgba(26, 26, 46, 0.3);
+
+  /* 主色调 - Indigo (保持一致) */
+  --color-primary: #6366f1;
+  --color-primary-light: #4f46e5;
+  --color-primary-dark: #4338ca;
+
+  /* 功能色 */
+  --color-system: #2563eb;
+  --color-plugin: #9333ea;
+  --color-file: #16a34a;
+  --color-app: #db2777;
+
+  /* 边框 */
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.1);
+  --border-focus: rgba(99, 102, 241, 0.5);
+
+  /* 窗口阴影 */
+  --window-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 25px 50px -12px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.02) inset;
+
+  /* 滚动条 */
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+}
+
+/* ==================== 别名变量 - 兼容组件中的引用 ==================== */
+:root {
+  /* 文字别名 */
+  --text-color: var(--text-primary);
+  /* 边框别名 */
+  --border-color: var(--border-default);
+  /* 强调色别名 */
+  --accent-color: var(--color-primary);
+}
+
 /* ==================== 滚动条 ==================== */
 ::-webkit-scrollbar {
   width: 8px;
@@ -117,10 +178,10 @@ main {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--scrollbar-thumb-hover);
 }

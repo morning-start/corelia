@@ -51,9 +51,11 @@ fn parse_shortcut(shortcut_str: &str) -> Result<Shortcut, String> {
             "meta" => modifiers |= Modifiers::SUPER,
             key => {
                 let upper = key.to_uppercase();
-                key_code = map.get(&upper).copied()
-                    .ok_or_else(|| format!("Unsupported key: {}", key))
-                    .ok();
+                if let Some(&code) = map.get(&upper) {
+                    key_code = Some(code);
+                } else {
+                    return Err(format!("Unsupported key: {}", key));
+                }
             }
         }
     }

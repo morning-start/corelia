@@ -14,8 +14,12 @@ export const WINDOW_CONFIG = {
 } as const;
 
 export const SEARCH_CONFIG = {
-  MAX_HISTORY_ITEMS: 5,
+  /** 搜索结果防抖延迟 (ms) */
   DEBOUNCE_DELAY: 150,
+  /** 历史记录保存防抖延迟 (ms) — 用户停止输入后多久保存 */
+  HISTORY_SAVE_DELAY: 300,
+  /** UI 显示的历史条数 */
+  DISPLAYED_HISTORY_COUNT: 5,
 } as const;
 
 export const PERFORMANCE_CONFIG = {
@@ -25,8 +29,8 @@ export const PERFORMANCE_CONFIG = {
 export const DEFAULT_USER_CONFIG: UserConfig = {
   theme: 'dark',
   behavior: { autoHide: true, autoHideDelay: 3000 },
-  window: { width: 600, height: 400 },
-  search: { defaultCategory: 'all', maxResults: 20 },
+  window: { width: 600, height: 420 },
+  search: { defaultCategory: 'all', maxResults: 20, maxHistoryCapacity: 100 },
 };
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
@@ -45,7 +49,7 @@ export interface UserConfig {
   theme: 'dark' | 'light' | 'system';
   behavior: { autoHide: boolean; autoHideDelay: number };
   window: { width: number; height: number };
-  search: { defaultCategory: 'all' | 'plugins' | 'system'; maxResults: number };
+  search: { defaultCategory: 'all' | 'plugins' | 'system'; maxResults: number; maxHistoryCapacity?: number };
 }
 
 export interface AppConfig {

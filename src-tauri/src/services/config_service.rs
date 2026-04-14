@@ -162,8 +162,8 @@ impl ConfigService {
         serde_json::json!({
             "theme": "dark",
             "behavior": { "autoHide": true, "autoHideDelay": 3000 },
-            "window": { "width": 600, "height": 400 },
-            "search": { "defaultCategory": "all", "maxResults": 20 }
+            "window": { "width": 600, "height": 420 },
+            "search": { "defaultCategory": "all", "maxResults": 20, "maxHistoryCapacity": 100 }
         })
     }
 

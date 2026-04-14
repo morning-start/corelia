@@ -81,24 +81,23 @@
 
   /** 快捷键变更处理 */
   async function handleShortcutChange(shortcut: string) {
+    // 立即更新显示值（乐观更新）
+    systemConfig.shortcut.summon = shortcut;
+
     try {
       if (shortcut) {
         await shortcutService.register(shortcut);
       } else {
         await shortcutService.unregisterAll();
       }
-      systemConfig.shortcut.summon = shortcut;
-      // 系统级配置修改需用户确认
-      const confirmed = confirm('修改快捷键配置，确定继续？');
-      if (confirmed) {
-        await system.save(systemConfig);
-      } else {
-        // 取消则恢复原配置
-        await system.load();
-      }
+
+      // 持久化到后端
+      await system.save(systemConfig);
     } catch (e) {
       console.error('Failed to register shortcut:', e);
       alert('快捷键注册失败，请重试');
+      // 失败时回滚显示值
+      await system.load();
     }
   }
 </script>

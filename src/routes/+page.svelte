@@ -3,8 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { LogicalSize } from "@tauri-apps/api/dpi";
-  import { WINDOW_CONFIG } from '$lib/config';
-  import type { FilterResult } from 'fuzzy';
+  import { WINDOW_CONFIG, SEARCH_CONFIG } from '$lib/config';
   import { theme } from '$lib/stores/theme';
   import { system } from '$lib/stores/system';
   import { user } from '$lib/stores/user';
@@ -36,20 +35,18 @@
   /** 当前选中的分类 */
   let selectedCategory = $state<'all' | 'system' | 'plugin' | 'history'>('all');
 
-  /** 本地状态：用于 UI 绑定的配置快照 */
-  let systemConfigSnapshot = $state({ summon: 'Alt+Space', enabled: false, minimizeToTray: true });
+  /** 本地状态：用于 UI 绑定的用户配置快照 */
   let userConfigSnapshot = $state({ autoHide: true, autoHideDelay: 3000 });
 
   /** 取消订阅函数列表 */
   let unsubQuery: (() => void) | undefined;
   let unsubResults: (() => void) | undefined;
   let unsubHistory: (() => void) | undefined;
-  let unsubSystem: (() => void) | undefined;
   let unsubUser: (() => void) | undefined;
 
-  /**
-   * 组件挂载时初始化
-   */
+  /** 历史记录保存防抖定时器（用户停止输入后才记录） */
+  let historySaveTimer: ReturnType<typeof setTimeout> | null = null;
+
   onMount(() => {
     // 设置窗口尺寸（使用 LogicalSize 获得更好的 DPI 支持）
     appWindow.setSize(new LogicalSize(WINDOW_CONFIG.WIDTH, WINDOW_CONFIG.HEIGHT)).catch(console.error);
@@ -65,12 +62,15 @@
     ]).then(() => {
       const loadedTheme = user.get('theme');
       if (loadedTheme) theme.set(loadedTheme as 'dark' | 'light' | 'system');
+
+      // 将历史容量配置同步到 history store
+      const searchCfg = user.get('search');
+      if (searchCfg?.maxHistoryCapacity) {
+        searchHistory.setMaxCapacity(searchCfg.maxHistoryCapacity);
+      }
     });
 
     // 订阅配置变化
-    unsubSystem = system.subscribe((s) => {
-      systemConfigSnapshot = { ...s.shortcut, ...s.startup };
-    });
     unsubUser = user.subscribe((s) => {
       userConfigSnapshot = { ...s.behavior };
     });
@@ -98,14 +98,10 @@
 
     // 🔥 订阅合并后的搜索结果（包含系统项 + 插件项）
     unsubResults = searchStore.results.subscribe(v => {
-      resultsValue = selectedCategory === 'all' ? v : v.filter((r: ExtendedSearchResult) => {
-        if (selectedCategory === 'plugin') return r.isPlugin === true;
-        if (selectedCategory === 'system') return r.isPlugin !== true;
-        return true; // 'all' 或 'history'
-      });
+      resultsValue = filterResultsByCategory(v);
     });
     unsubHistory = searchHistory.subscribe(state => {
-      historyItems = state.items.slice(0, 5).map(item => item.query);
+      historyItems = state.items.slice(0, SEARCH_CONFIG.DISPLAYED_HISTORY_COUNT).map(item => item.query);
     });
 
     // 注册全局快捷键
@@ -127,7 +123,6 @@
       unsubQuery?.();
       unsubResults?.();
       unsubHistory?.();
-      unsubSystem?.();
       unsubUser?.();
       unlistenFocus.then(unlisten => unlisten());
     };
@@ -137,6 +132,10 @@
    * 处理键盘事件
    */
   async function handleKeydown(event: KeyboardEvent) {
+    // 快捷键录制期间，不处理全局键盘事件（让 ShortcutRecorder 捕获）
+    const recorder = document.querySelector('.shortcut-recorder .record-btn.recording');
+    if (recorder) return;
+
     if (event.key === 'Escape') {
       if (showSettings) {
         showSettings = false;
@@ -169,6 +168,12 @@
     // Enter 执行选中项
     if (event.key === 'Enter') {
       event.preventDefault();
+
+      // 按回车时立即保存搜索词到历史（不等防抖）
+      if (queryValue.trim()) {
+        if (historySaveTimer) clearTimeout(historySaveTimer);
+        searchHistory.add(queryValue);
+      }
 
       // 如果有搜索词，执行搜索结果
       if (queryValue.length > 0 && selectedIndex >= 0) {
@@ -207,20 +212,34 @@
   }
 
   /**
-   * 处理搜索输入
+   * 处理搜索输入（统一管理搜索触发和历史记录）
+   *
+   * 数据流：SearchBox.oninput → handleSearchInput → [搜索防抖] → searchStore.setQuery
+   *                                              → [历史防抖 300ms] → searchHistory.add
    */
   function handleSearchInput(query: string) {
+    // 立即更新 queryValue（通过 searchStore.query subscribe 同步）
+    // 注意：这里立即 setQuery 保证 UI 实时响应，搜索结果由 SearchStore 内部 debounce 控制
     searchStore.setQuery(query);
     selectedIndex = -1;
-    if (query) {
-      searchHistory.add(query);
+
+    if (!query.trim()) {
+      // 空输入：清除历史保存定时器
+      if (historySaveTimer) { clearTimeout(historySaveTimer); historySaveTimer = null; }
+      return;
     }
+
+    // 搜索历史：用户停止输入后才保存（避免记录打字中间态）
+    if (historySaveTimer) clearTimeout(historySaveTimer);
+    historySaveTimer = setTimeout(() => {
+      searchHistory.add(query);
+    }, SEARCH_CONFIG.HISTORY_SAVE_DELAY);
   }
 
   /**
    * 处理选择结果项（鼠标点击）
    */
-  async function handleSelectItem(item: ExecutableItem, index: number) {
+  async function handleSelectItem(item: ExecutableItem) {
     console.log('Selected item:', item);
     await executeItem(item);
   }
@@ -233,18 +252,22 @@
   }
 
   /**
+   * 根据当前分类过滤搜索结果
+   */
+  function filterResultsByCategory(results: ExtendedSearchResult[]): ExtendedSearchResult[] {
+    if (selectedCategory === 'all' || selectedCategory === 'history') return results;
+    if (selectedCategory === 'plugin') return results.filter(r => r.isPlugin === true);
+    if (selectedCategory === 'system') return results.filter(r => r.isPlugin !== true);
+    return results;
+  }
+
+  /**
    * 处理分类切换
    */
   function handleCategoryChange(category: 'all' | 'system' | 'plugin' | 'history') {
     selectedCategory = category;
-    // 立即重新过滤结果
-    searchStore.results.subscribe(v => {
-      resultsValue = category === 'all' ? v : v.filter((r: ExtendedSearchResult) => {
-        if (category === 'plugin') return r.isPlugin === true;
-        if (category === 'system') return r.isPlugin !== true;
-        return true; // 'all' 或 'history'
-      });
-    });
+    // 立即用当前结果重新过滤
+    resultsValue = filterResultsByCategory(resultsValue);
   }
 </script>
 

@@ -41,15 +41,15 @@
   }
 
   /**
-   * 获取分类颜色
+   * 获取分类对应的 CSS 类名（颜色由 themes.css 功能色变量驱动）
    */
-  function getCategoryColor(category: string): { bg: string; icon: string } {
+  function getCategoryClass(category: string): string {
     switch (category) {
-      case '系统': return { bg: 'rgba(59, 130, 246, 0.15)', icon: '#60a5fa' };
-      case '插件': return { bg: 'rgba(168, 85, 247, 0.15)', icon: '#c084fc' };
-      case '文件': return { bg: 'rgba(34, 197, 94, 0.15)', icon: '#4ade80' };
-      case '应用': return { bg: 'rgba(236, 72, 153, 0.15)', icon: '#f472b6' };
-      default: return { bg: 'rgba(255, 255, 255, 0.1)', icon: '#a1a1aa' };
+      case '系统': return 'category-system';
+      case '插件': return 'category-plugin';
+      case '文件': return 'category-file';
+      case '应用': return 'category-app';
+      default: return 'category-default';
     }
   }
 
@@ -88,7 +88,9 @@
                 <polyline points="12 6 12 12 16 14"/>
               </svg>
             </div>
-            <span class="item-title">{historyItem}</span>
+            <div class="item-content">
+              <span class="item-title">{historyItem}</span>
+            </div>
             <span class="shortcut-hint">↵</span>
           </button>
         {/each}
@@ -113,14 +115,14 @@
       <div class="section-content">
         {#each results as result, index}
           {@const item = result.original}
-          {@const colors = getCategoryColor(item.category)}
+          {@const catClass = getCategoryClass(item.category)}
           {@const actualIndex = showHistory ? index + historyItems.length : index}
           <button
             class="result-item"
             class:selected={selectedIndex === actualIndex}
             onclick={() => handleResultSelect(item, actualIndex)}
           >
-            <div class="icon-wrapper" style="background: {colors.bg}; color: {colors.icon};">
+            <div class="icon-wrapper {catClass}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d={getCategoryIcon(item.category)}/>
               </svg>
@@ -243,6 +245,13 @@
     background: var(--bg-secondary);
     color: var(--text-tertiary);
   }
+
+  /* 分类颜色 — 使用 themes.css 功能色变量，自动适配深/浅色主题 */
+  .icon-wrapper.category-system { background: color-mix(in srgb, var(--color-system) 15%, transparent); color: var(--color-primary-light); }
+  .icon-wrapper.category-plugin  { background: color-mix(in srgb, var(--color-plugin) 15%, transparent); color: #c084fc; }
+  .icon-wrapper.category-file    { background: color-mix(in srgb, var(--color-file) 15%, transparent);   color: #4ade80; }
+  .icon-wrapper.category-app     { background: color-mix(in srgb, var(--color-app) 15%, transparent);     color: #f472b6; }
+  .icon-wrapper.category-default { background: var(--bg-hover); color: var(--text-muted); }
 
   /* 内容 */
   .item-content {

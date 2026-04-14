@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { api } from '$lib/api';
+import { SEARCH_CONFIG, type UserConfig } from '$lib/config';
 
 export interface HistoryItem {
   query: string;
@@ -9,13 +10,17 @@ export interface HistoryItem {
 
 interface SearchHistoryState {
   items: HistoryItem[];
-  maxItems: number;
+  /** 历史记录存储最大容量 */
+  maxCapacity: number;
 }
+
+/** 默认历史容量，与 UserConfig.search.maxHistoryCapacity 保持一致 */
+const DEFAULT_MAX_CAPACITY = 100;
 
 function createHistoryStore() {
   const { subscribe, set, update } = writable<SearchHistoryState>({
     items: [],
-    maxItems: 100
+    maxCapacity: DEFAULT_MAX_CAPACITY,
   });
 
   return {
@@ -25,11 +30,16 @@ function createHistoryStore() {
       try {
         const stored = await api.store.load('search_history');
         if (stored && Array.isArray(stored)) {
-          set({ items: stored as HistoryItem[], maxItems: 100 });
+          set({ items: stored as HistoryItem[], maxCapacity: DEFAULT_MAX_CAPACITY });
         }
       } catch (e) {
         console.error('Failed to load search history:', e);
       }
+    },
+
+    /** 设置最大容量（从 UserConfig 加载后调用） */
+    setMaxCapacity(capacity: number) {
+      update(state => ({ ...state, maxCapacity: capacity }));
     },
 
     add(query: string) {
@@ -50,10 +60,11 @@ function createHistoryStore() {
           ];
         }
 
-        if (newItems.length > history.maxItems) {
+        // 超出容量时按使用频率+时间裁剪
+        if (newItems.length > history.maxCapacity) {
           newItems = newItems
             .sort((a, b) => b.count - a.count || b.timestamp - a.timestamp)
-            .slice(0, history.maxItems);
+            .slice(0, history.maxCapacity);
         }
 
         api.store.save('search_history', newItems).catch(console.error);
@@ -63,7 +74,7 @@ function createHistoryStore() {
     },
 
     async clear() {
-      set({ items: [], maxItems: 100 });
+      set({ items: [], maxCapacity: DEFAULT_MAX_CAPACITY });
       await api.store.delete('search_history');
     },
 
