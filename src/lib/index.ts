@@ -11,14 +11,13 @@ export { searchHistory } from './stores/history';
 export type { HistoryItem } from './stores/history';
 
 export { system } from './stores/system';
-export type { SystemConfig } from './stores/system';
 
 export { user } from './stores/user';
 
 export { theme } from './stores/theme';
 export type { Theme } from './stores/theme';
 
-export type { UserConfig, AppConfig, SystemConfig as SystemConfigType } from './config';
+export type { UserConfig, AppConfig, SystemConfig } from './config';
 
 export type { SearchItem } from './search/fuzzy';
 

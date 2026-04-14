@@ -52,22 +52,25 @@ function createUserStore() {
   };
 }
 
-function setNestedValue<T extends object>(obj: T, path: string, value: unknown): T {
+function setNestedValue<T extends Record<string, unknown>>(obj: T, path: string, value: unknown): T {
   const keys = path.split('.');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let current: any = { ...obj };
+  // 从根对象浅拷贝开始，逐层深入时也拷贝每层，确保不可变更新
+  let root: Record<string, unknown> = { ...obj };
+  let current = root;
 
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
-    if (!(key in current) || typeof current[key] !== 'object') {
+    const next = current[key];
+    if (!next || typeof next !== 'object' || Array.isArray(next)) {
       current[key] = {};
+    } else {
+      current[key] = { ...(next as Record<string, unknown>) };
     }
-    current[key] = { ...current[key] };
-    current = current[key];
+    current = current[key] as Record<string, unknown>;
   }
 
   current[keys.at(-1)!] = value;
-  return obj;
+  return root as T;
 }
 
 export const user = createUserStore();

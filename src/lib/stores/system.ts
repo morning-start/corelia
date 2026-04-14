@@ -1,19 +1,7 @@
 import { writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { deepClone } from '$lib/utils/helpers';
-
-export interface SystemConfig {
-  shortcut: {
-    summon: string;
-  };
-  startup: {
-    enabled: boolean;
-    minimizeToTray: boolean;
-  };
-  advanced: {
-    debugMode: boolean;
-  };
-}
+import type { SystemConfig } from '$lib/config';
 
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   shortcut: {

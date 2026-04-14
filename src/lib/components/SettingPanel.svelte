@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { theme, type Theme } from '$lib/stores/theme';
-  import { system, type SystemConfig } from '$lib/stores/system';
+  import { system } from '$lib/stores/system';
   import { user } from '$lib/stores/user';
-  import type { UserConfig } from '$lib/config';
+  import type { UserConfig, SystemConfig } from '$lib/config';
   import { startupService } from '$lib/services/startup';
-  import { shortcutService } from '$lib/services/shortcut';
+  import { api } from '$lib/api';
   import ShortcutRecorder from '$lib/components/ShortcutRecorder.svelte';
   import PluginManager from '$lib/components/PluginManager.svelte';
 
@@ -86,9 +86,9 @@
 
     try {
       if (shortcut) {
-        await shortcutService.register(shortcut);
+        await api.shortcut.register(shortcut);
       } else {
-        await shortcutService.unregisterAll();
+        await api.shortcut.unregisterAll();
       }
 
       // 持久化到后端
