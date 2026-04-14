@@ -1,4 +1,4 @@
-import { writable, derived, type Readable, type Writable } from 'svelte/store';
+import { writable, derived, get, type Readable, type Writable } from 'svelte/store';
 import { search, type SearchItem } from '$lib/search/fuzzy';
 import { createSystemItems, type ExecutableItem } from '$lib/services/executor';
 import { pluginService } from '$lib/plugins/service';
@@ -123,11 +123,7 @@ class SearchStore {
   }
 
   private mergeResults(): void {
-    let currentSystemResults: any[] = [];
-    const unsubscribe = this.systemResults.subscribe(value => {
-      currentSystemResults = value;
-    });
-    unsubscribe();
+    const currentSystemResults = get(this.systemResults);
 
     const extendedSystemResults: ExtendedSearchResult[] = currentSystemResults.map(r => ({
       original: r.original,
@@ -145,7 +141,6 @@ class SearchStore {
         target: r.pluginId || 'unknown',
         args: [r.action],
         hideWindow: true,
-        ...(r as any)
       };
 
       return {
@@ -157,32 +152,12 @@ class SearchStore {
 
     const mergedResults = [...extendedSystemResults, ...extendedPluginResults];
     this.results.set(mergedResults);
-
-    if (mergedResults.length > 0) {
-      console.log(`[SearchStore] 📊 结果合并完成: 系统 ${extendedSystemResults.length} 个 + 插件 ${extendedPluginResults.length} 个 = 总计 ${mergedResults.length} 个`);
-    }
   }
 
   async refreshPluginResults(): Promise<number> {
-    const currentQuery = this.getQueryValue();
+    const currentQuery = get(this.query);
     await this.performPluginSearch(currentQuery);
-
-    let count = 0;
-    const unsubscribe = this.results.subscribe(results => {
-      count = results.length;
-    });
-    unsubscribe();
-
-    return count;
-  }
-
-  private getQueryValue(): string {
-    let value = '';
-    const unsubscribe = this.query.subscribe(v => {
-      value = v;
-    });
-    unsubscribe();
-    return value;
+    return get(this.results).length;
   }
 }
 

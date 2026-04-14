@@ -56,7 +56,7 @@
   /**
    * 处理历史记录选择
    */
-  function handleHistorySelect(historyItem: string, index: number) {
+  function handleHistorySelect(historyItem: string) {
     onHistorySelect?.(historyItem);
   }
 
@@ -80,7 +80,7 @@
           <button
             class="result-item"
             class:selected={selectedIndex === index}
-            onclick={() => handleHistorySelect(historyItem, index)}
+            onclick={() => handleHistorySelect(historyItem)}
           >
             <div class="icon-wrapper history">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -248,9 +248,9 @@
 
   /* 分类颜色 — 使用 themes.css 功能色变量，自动适配深/浅色主题 */
   .icon-wrapper.category-system { background: color-mix(in srgb, var(--color-system) 15%, transparent); color: var(--color-primary-light); }
-  .icon-wrapper.category-plugin  { background: color-mix(in srgb, var(--color-plugin) 15%, transparent); color: #c084fc; }
-  .icon-wrapper.category-file    { background: color-mix(in srgb, var(--color-file) 15%, transparent);   color: #4ade80; }
-  .icon-wrapper.category-app     { background: color-mix(in srgb, var(--color-app) 15%, transparent);     color: #f472b6; }
+  .icon-wrapper.category-plugin  { background: color-mix(in srgb, var(--color-plugin) 15%, transparent); color: var(--color-plugin); }
+  .icon-wrapper.category-file    { background: color-mix(in srgb, var(--color-file) 15%, transparent);   color: var(--color-file); }
+  .icon-wrapper.category-app     { background: color-mix(in srgb, var(--color-app) 15%, transparent);     color: var(--color-app); }
   .icon-wrapper.category-default { background: var(--bg-hover); color: var(--text-muted); }
 
   /* 内容 */
