@@ -1,0 +1,26 @@
+{
+  "name": "url-toolkit",
+  "version": "1.0.0",
+  "type": "quickjs",
+  "logo": "",
+  "prefix": "url",
+  "description": "URL 编解码工具，支持 URL Encode/Decode、Base64 编解码、JSON 格式化",
+  "author": "Corelia Team",
+  "main": "index.js",
+  "patches": [],
+  "features": [
+    {
+      "code": "encode",
+      "label": "编码工具",
+      "type": "list",
+      "items": [
+        { "label": "🔐 URL 编码", "action": "urlEncode", "icon": "🔐" },
+        { "label": "🔓 URL 解码", "action": "urlDecode", "icon": "🔓" },
+        { "label": "📦 Base64 编码", "action": "base64Encode", "icon": "📦" },
+        { "label": "📋 Base64 解码", "action": "base64Decode", "icon": "📋" },
+        { "label": "🎨 JSON 格式化", "action": "jsonFormat", "icon": "🎨" },
+        { "label": "#️⃣ Hash 生成", "action": "hashGen", "icon": "#️⃣" }
+      ]
+    }
+  ]
+}

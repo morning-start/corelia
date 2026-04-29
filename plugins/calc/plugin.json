@@ -1,0 +1,24 @@
+{
+  "name": "calc",
+  "version": "1.0.0",
+  "type": "quickjs",
+  "logo": "",
+  "prefix": "calc",
+  "description": "快速计算器，支持数学表达式求值、单位换算、常用常量查询",
+  "author": "Corelia Team",
+  "main": "index.js",
+  "patches": [],
+  "features": [
+    {
+      "code": "calculate",
+      "label": "计算功能",
+      "type": "list",
+      "items": [
+        { "label": "🔢 表达式计算", "action": "evalExpr", "icon": "🔢" },
+        { "label": "📐 单位换算", "action": "unitConvert", "icon": "📐" },
+        { "label": "📊 百分比计算", "action": "percentCalc", "icon": "📊" },
+        { "label": "🧮 常用公式", "action": "formulas", "icon": "🧮" }
+      ]
+    }
+  ]
+}
