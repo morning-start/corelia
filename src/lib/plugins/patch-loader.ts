@@ -107,7 +107,9 @@ class PatchLoader {
       const wasmModule = await this.loadWasmModule(patchName, jsUrl, wasmUrl);
 
       if (!wasmModule) {
-        console.error(`[PatchLoader] ❌ 加载 WASM 模块失败: ${patchName}`);
+        // 所有加载策略均失败，上报降级状态
+        console.error(`[PatchLoader] ❌ 加载 WASM 模块失败: ${patchName}，已降级`);
+        await this.reportPatchError(patchName, '所有 WASM 加载策略均失败');
         return;
       }
 
@@ -135,13 +137,35 @@ class PatchLoader {
 
     } catch (e) {
       console.error(`[PatchLoader] ❌ 加载 patch ${patchName} 失败:`, e);
+      await this.reportPatchError(patchName, String(e));
+    }
+  }
+
+  /**
+   * 上报 patch 加载错误到后端（用于监控和降级通知）
+   */
+  private async reportPatchError(patchName: string, error: string): Promise<void> {
+    console.warn(`[PatchLoader] ⚠️ 上报 patch 加载错误: ${patchName} - ${error}`);
+    try {
+      // 通过事件通知后端 patch 加载失败，而非抛出异常
+      // 这样 Rust 侧可以选择继续加载插件（降级模式）或提示用户
+      await invoke('wasm_store_call_result', {
+        result: {
+          requestId: `patch_error_${patchName}_${Date.now()}`,
+          success: false,
+          error: `[PatchLoader] patch ${patchName} 加载失败: ${error}`,
+        },
+      });
+    } catch (reportErr) {
+      console.error(`[PatchLoader] ❌ 上报 patch 错误也失败了:`, reportErr);
     }
   }
 
   /**
    * 动态加载 WASM 模块
    *
-   * 使用动态 import() 加载胶水 JS，再初始化 WASM
+   * 使用动态 import() 加载胶水 JS，再初始化 WASM。
+   * 失败时自动降级到 fetch + WebAssembly API 直接加载。
    */
   private async loadWasmModule(
     patchName: string,
@@ -156,14 +180,27 @@ class PatchLoader {
       // 调用初始化函数加载 WASM
       if (typeof module.default === 'function') {
         // 新版 wasm-pack 输出格式：export default async function init()
-        await module.default(wasmUrl);
-        console.log(`[PatchLoader] ✅ WASM 模块初始化成功: ${patchName}`);
+        try {
+          await module.default(wasmUrl);
+          console.log(`[PatchLoader] ✅ WASM 模块初始化成功: ${patchName}`);
+        } catch (initErr) {
+          console.warn(`[PatchLoader] ⚠️ WASM 初始化失败 (${patchName})，尝试回退:`, initErr);
+          throw initErr; // 抛出后由外层 catch 进入回退
+        }
       } else if (typeof module.initSync === 'function') {
         // 同步初始化格式
-        const response = await fetch(wasmUrl);
-        const buffer = await response.arrayBuffer();
-        module.initSync(new Uint8Array(buffer));
-        console.log(`[PatchLoader] ✅ WASM 模块同步初始化成功: ${patchName}`);
+        try {
+          const response = await fetch(wasmUrl);
+          if (!response.ok) {
+            throw new Error(`fetch WASM 失败: ${response.status}`);
+          }
+          const buffer = await response.arrayBuffer();
+          module.initSync(new Uint8Array(buffer));
+          console.log(`[PatchLoader] ✅ WASM 模块同步初始化成功: ${patchName}`);
+        } catch (initErr) {
+          console.warn(`[PatchLoader] ⚠️ WASM 同步初始化失败 (${patchName})，尝试回退:`, initErr);
+          throw initErr;
+        }
       } else if (module.wasm !== undefined) {
         // 模块已经初始化
         console.log(`[PatchLoader] ✅ WASM 模块已预初始化: ${patchName}`);
@@ -171,7 +208,7 @@ class PatchLoader {
 
       return module as WasmModuleInstance;
     } catch (e) {
-      console.error(`[PatchLoader] ❌ 动态导入 WASM 模块失败 (${patchName}):`, e);
+      console.error(`[PatchLoader] ❌ 动态导入 WASM 模块失败 (${patchName})，启用降级策略:`, e);
 
       // 回退：尝试使用 fetch + WebAssembly API 直接加载
       return this.loadWasmFallback(patchName, wasmUrl);
@@ -192,8 +229,30 @@ class PatchLoader {
       console.log(`[PatchLoader] 🔄 尝试回退加载: ${patchName}`);
 
       const response = await fetch(wasmUrl);
+      if (!response.ok) {
+        console.error(`[PatchLoader] ❌ fetch WASM 失败: ${response.status} ${response.statusText}`);
+        return null;
+      }
+
       const bytes = await response.arrayBuffer();
-      const { instance } = await WebAssembly.instantiate(bytes, {});
+
+      // 先尝试编译模块以捕获格式错误
+      let wasmModule: WebAssembly.Module;
+      try {
+        wasmModule = await WebAssembly.compile(bytes);
+      } catch (compileErr) {
+        console.error(`[PatchLoader] ❌ WASM 编译失败:`, compileErr);
+        return null;
+      }
+
+      // 实例化模块
+      let instance: WebAssembly.Instance;
+      try {
+        instance = await WebAssembly.instantiate(wasmModule, {});
+      } catch (instantiateErr) {
+        console.error(`[PatchLoader] ❌ WASM 实例化失败:`, instantiateErr);
+        return null;
+      }
 
       // 将 WASM 导出包装为可调用函数
       const wrappedModule: WasmModuleInstance = {};
@@ -201,13 +260,14 @@ class PatchLoader {
 
       for (const [name, exp] of Object.entries(exports)) {
         if (typeof exp === 'function') {
-          // 直接暴露 WASM 导出函数
+          // 直接暴露 WASM 导出函数（带运行时错误隔离）
           wrappedModule[name] = (...args: unknown[]) => {
             try {
               return (exp as Function)(...args);
             } catch (e) {
               console.error(`[PatchLoader] WASM 函数 ${name} 执行失败:`, e);
-              throw e;
+              // 返回 null 而非抛出，避免破坏整个调用链
+              return null;
             }
           };
         }
@@ -268,18 +328,22 @@ class PatchLoader {
         throw new Error(`无效的函数名格式: ${funcName}`);
       }
 
-      // 查找已加载的模块
+      // 查找已加载的模块（如果未加载，尝试降级处理）
       const patch = this.loadedPatches.get(patchName);
       if (!patch) {
-        throw new Error(`patch 未加载: ${patchName}`);
+        console.warn(`[PatchLoader] ⚠️ patch 未加载: ${patchName}，返回降级结果`);
+        await this.storeErrorResult(requestId, `patch 未加载: ${patchName}`);
+        return;
       }
 
       const func = patch.module[methodName];
       if (typeof func !== 'function') {
-        throw new Error(`函数不存在: ${methodName} (patch: ${patchName})`);
+        console.warn(`[PatchLoader] ⚠️ 函数不存在: ${methodName} (patch: ${patchName})`);
+        await this.storeErrorResult(requestId, `函数不存在: ${methodName}`);
+        return;
       }
 
-      // 解析参数
+      // 解析参数（宽容解析，非数组时包装为数组）
       let parsedArgs: unknown[];
       try {
         parsedArgs = JSON.parse(argsJson);
@@ -290,14 +354,30 @@ class PatchLoader {
         parsedArgs = [argsJson];
       }
 
-      // 执行 WASM 函数
-      const result = func(...parsedArgs);
+      // 执行 WASM 函数（带运行时错误隔离）
+      let result: unknown;
+      try {
+        result = func(...parsedArgs);
+      } catch (execErr) {
+        console.error(`[PatchLoader] ❌ WASM 函数执行异常: ${funcName}`, execErr);
+        await this.storeErrorResult(requestId, `执行异常: ${execErr}`);
+        return;
+      }
 
       // 序列化结果并通过 invoke 存入后端 WasmBridge
+      let resultStr: string;
+      try {
+        resultStr = JSON.stringify(result ?? null);
+      } catch (serializeErr) {
+        console.error(`[PatchLoader] ❌ 结果序列化失败:`, serializeErr);
+        await this.storeErrorResult(requestId, `结果序列化失败: ${serializeErr}`);
+        return;
+      }
+
       const resultEntry: WasmCallResult = {
         requestId,
         success: true,
-        result: JSON.stringify(result ?? null),
+        result: resultStr,
       };
 
       await invoke('wasm_store_call_result', { result: resultEntry });
@@ -305,16 +385,25 @@ class PatchLoader {
       console.log(`[PatchLoader] ✅ WASM 函数调用完成: ${funcName}`);
 
     } catch (e) {
-      console.error(`[PatchLoader] ❌ WASM 函数调用失败: ${funcName}`, e);
+      console.error(`[PatchLoader] ❌ WASM 函数调用未处理异常: ${funcName}`, e);
+      await this.storeErrorResult(requestId, String(e));
+    }
+  }
 
-      // 返回错误
-      const resultEntry: WasmCallResult = {
-        requestId,
-        success: false,
-        error: String(e),
-      };
-
-      await invoke('wasm_store_call_result', { result: resultEntry });
+  /**
+   * 存储错误结果到后端 WasmBridge（错误隔离辅助方法）
+   */
+  private async storeErrorResult(requestId: string, error: string): Promise<void> {
+    try {
+      await invoke('wasm_store_call_result', {
+        result: {
+          requestId,
+          success: false,
+          error,
+        },
+      });
+    } catch (storeErr) {
+      console.error(`[PatchLoader] ❌ 存储错误结果也失败了:`, storeErr);
     }
   }
 

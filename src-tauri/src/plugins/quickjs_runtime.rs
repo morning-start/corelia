@@ -206,7 +206,10 @@ impl QuickJSRuntime {
         pool.len()
     }
     
-    /// 清理闲置超时的 VM
+    /// 定期清理闲置超时的 VM
+    ///
+    /// 会自动销毁超过 idle_timeout_secs 未使用的 VM 实例。
+    /// 建议在每次加载插件前调用，以释放不活跃的资源。
     ///
     /// # Returns
     /// - `Ok(usize)`: 清理的 VM 数量
@@ -214,12 +217,55 @@ impl QuickJSRuntime {
     pub fn cleanup(&self) -> Result<usize, String> {
         let mut pool = self.vm_pool.borrow_mut();
         let original_len = pool.len();
-        
+        let timeout_secs = self.config.idle_timeout_secs;
+
+        // 收集需要清理的 VM ID（先收集避免在迭代中修改）
+        let to_remove: Vec<String> = pool
+            .iter()
+            .filter(|vm| vm.is_idle_timeout(timeout_secs))
+            .map(|vm| vm.id.clone())
+            .collect();
+
+        if !to_remove.is_empty() {
+            println!("[QuickJSRuntime] 发现 {} 个闲置超时 VM（超时: {}s），准备清理...", to_remove.len(), timeout_secs);
+        }
+
         // 移除闲置超时的 VM
-        pool.retain(|vm| !vm.is_idle_timeout(self.config.idle_timeout_secs));
-        
+        pool.retain(|vm| !to_remove.contains(&vm.id));
+
         let removed_count = original_len - pool.len();
+        if removed_count > 0 {
+            println!("[QuickJSRuntime] ✅ 已清理 {} 个闲置超时 VM，剩余 {} 个活跃 VM", removed_count, pool.len());
+        }
         Ok(removed_count)
+    }
+
+    /// 强制清理所有 VM（应用退出或紧急释放资源时调用）
+    ///
+    /// # Returns
+    /// - `Ok(usize)`: 清理的 VM 数量
+    pub fn cleanup_all(&self) -> Result<usize, String> {
+        let mut pool = self.vm_pool.borrow_mut();
+        let removed_count = pool.len();
+        pool.clear();
+        println!("[QuickJSRuntime] 已强制清理所有 {} 个 VM", removed_count);
+        Ok(removed_count)
+    }
+
+    /// 获取 VM 详细信息（用于监控和调试）
+    ///
+    /// # Returns
+    /// Vec 中包含每个 VM 的 ID、创建时间、最后使用时间和闲置状态
+    pub fn get_vm_stats(&self) -> Vec<VmStats> {
+        let pool = self.vm_pool.borrow();
+        pool.iter()
+            .map(|vm| VmStats {
+                id: vm.id.clone(),
+                created_at_secs: vm.created_at.elapsed().as_secs(),
+                last_used_at_secs: vm.last_used_at.elapsed().as_secs(),
+                is_idle: vm.is_idle_timeout(self.config.idle_timeout_secs),
+            })
+            .collect()
     }
     
     /// 检查 VM 是否存在
@@ -260,6 +306,15 @@ impl QuickJSRuntime {
         // 在 context 作用域内执行操作
         vm.context.with(operation)
     }
+}
+
+/// VM 统计信息
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct VmStats {
+    pub id: String,
+    pub created_at_secs: u64,
+    pub last_used_at_secs: u64,
+    pub is_idle: bool,
 }
 
 /// 生成唯一的 VM ID
@@ -338,7 +393,7 @@ pub async fn quickjs_active_count(
 }
 
 /// 清理闲置 VM
-/// 
+///
 /// # Example
 /// ```typescript
 /// const removed = await invoke('quickjs_cleanup');
@@ -349,6 +404,22 @@ pub async fn quickjs_cleanup(
     runtime: tauri::State<'_, QuickJSRuntime>,
 ) -> Result<usize, String> {
     runtime.cleanup()
+}
+
+/// 强制清理所有 VM（应用退出时调用）
+#[tauri::command]
+pub async fn quickjs_cleanup_all(
+    runtime: tauri::State<'_, QuickJSRuntime>,
+) -> Result<usize, String> {
+    runtime.cleanup_all()
+}
+
+/// 获取 VM 统计信息（用于监控面板）
+#[tauri::command]
+pub async fn quickjs_vm_stats(
+    runtime: tauri::State<'_, QuickJSRuntime>,
+) -> Result<Vec<VmStats>, String> {
+    Ok(runtime.get_vm_stats())
 }
 
 /// 将 rquickjs::Value 转换为 serde_json::Value（crate 内部共享）

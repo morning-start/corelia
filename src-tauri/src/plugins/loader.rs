@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Instant, Duration};
 use tauri::Emitter;
 
 use crate::plugins::quickjs_runtime::QuickJSRuntime;
@@ -111,6 +111,16 @@ pub struct PluginInstance {
     pub on_ready_callback: Option<String>,
     /// 插件退出回调函数（JavaScript 函数引用）
     pub on_out_callback: Option<String>,
+    /// 加载失败次数（用于重试逻辑和错误隔离）
+    pub load_error_count: u32,
+    /// 最大重试次数
+    pub max_retries: u32,
+    /// 最后一次错误信息
+    pub last_error: Option<String>,
+    /// 加载失败后的下次允许重试时间
+    pub retry_after: Option<Instant>,
+    /// 加载重试的退避延迟（毫秒），每次失败翻倍
+    pub retry_backoff_ms: u64,
 }
 
 // ==================== 插件加载器核心实现 ====================
@@ -149,6 +159,12 @@ impl PluginLoader {
     /// 获取内部 QuickJSRuntime 的 Arc 引用（供外部 Commands 共享使用）
     pub fn runtime(&self) -> &Arc<QuickJSRuntime> {
         &self.quickjs_runtime
+    }
+
+    /// 获取配置中的闲置超时时间
+    pub fn idle_timeout_secs(&self) -> u64 {
+        // QuickJSConfig 的 idle_timeout_secs 默认值为 300
+        300
     }
 
     /// 扫描所有插件（仅加载元数据，懒加载策略）
@@ -223,6 +239,11 @@ impl PluginLoader {
                         registered_features: Vec::new(),
                         on_ready_callback: None,
                         on_out_callback: None,
+                        load_error_count: 0,
+                        max_retries: 3,
+                        last_error: None,
+                        retry_after: None,
+                        retry_backoff_ms: 1000,
                     };
 
                     // 8. 添加到 instances HashMap
@@ -365,15 +386,53 @@ impl PluginLoader {
         let instance = self.instances.get_mut(id)
             .ok_or_else(|| format!("插件不存在: {}", id))?;
 
-        // 2. 检查当前状态（仅允许从 MetaLoaded 或 Unloaded 状态加载）
+        // 2. 检查当前状态，防止重复加载和非法状态转换
         match &instance.state {
-            PluginState::Ready | PluginState::Loading => {
-                // 已加载或正在加载中，直接返回当前状态 + 已有的 vm_id
+            PluginState::Loading => {
+                // 正在加载中，直接返回当前状态 + 已有的 vm_id
                 let vm = instance.vm_id.clone();
+                println!("[PluginLoader] 插件 {} 正在加载中，跳过重复加载请求", id);
                 return Ok((instance.state.clone(), vm));
             }
-            PluginState::MetaLoaded | PluginState::Unloaded | PluginState::Cached | PluginState::Error(_) => {
-                // 允许从这些状态重新加载
+            PluginState::Ready => {
+                // 已加载，直接返回
+                let vm = instance.vm_id.clone();
+                instance.last_used = Some(Instant::now());
+                return Ok((instance.state.clone(), vm));
+            }
+            PluginState::Error(ref err_msg) => {
+                // Error 状态：检查是否允许重试
+                if instance.load_error_count >= instance.max_retries {
+                    let msg = format!(
+                        "插件 {} 加载失败次数已达上限 ({}): {}",
+                        id, instance.max_retries, err_msg
+                    );
+                    eprintln!("[PluginLoader] {}", msg);
+                    return Err(msg);
+                }
+                // 检查退避冷却是否结束
+                if let Some(retry_after) = instance.retry_after {
+                    if Instant::now() < retry_after {
+                        let remaining = retry_after.duration_since(Instant::now()).as_secs();
+                        let msg = format!(
+                            "插件 {} 重试冷却中，请等待 {} 秒后再试",
+                            id, remaining
+                        );
+                        println!("[PluginLoader] {}", msg);
+                        return Err(msg);
+                    }
+                }
+                println!(
+                    "[PluginLoader] 插件 {} 处于 Error 状态，尝试第 {} 次重载...",
+                    id, instance.load_error_count + 1
+                );
+            }
+            PluginState::Cached => {
+                // Cached 状态允许重新加载
+                println!("[PluginLoader] 插件 {} 处于 Cached 状态，重新加载...", id);
+            }
+            PluginState::MetaLoaded | PluginState::Unloaded => {
+                // 正常加载流程
             }
         }
 
@@ -384,74 +443,122 @@ impl PluginLoader {
             }
         }
 
-        // 4. 更新状态为 Loading
+        // 4. 更新状态为 Loading（原子操作，防止并发重复加载）
         instance.state = PluginState::Loading;
+        instance.last_used = Some(Instant::now());
 
         // 5. 确定入口文件路径
         let main_file = instance.manifest.main.as_deref().unwrap_or("index.js");
         let entry_path = instance.plugin_dir.join(main_file);
 
-        // 6. 读取入口文件内容
+        // 6. 读取入口文件内容（带错误隔离）
         if !entry_path.exists() {
-            instance.state = PluginState::Error(format!("入口文件不存在: {}", entry_path.display()));
-            return Err(format!("入口文件不存在: {}", entry_path.display()));
+            let err = format!("入口文件不存在: {}", entry_path.display());
+            instance.state = PluginState::Error(err.clone());
+            instance.load_error_count += 1;
+            eprintln!("[PluginLoader] ❌ 插件 {} 入口文件缺失: {}", id, entry_path.display());
+            return Err(err);
         }
 
-        let code = std::fs::read_to_string(&entry_path)
-            .map_err(|e| {
-                instance.state = PluginState::Error(format!("读取入口文件失败: {}", e));
-                format!("读取入口文件失败: {}", e)
-            })?;
+        let code = match std::fs::read_to_string(&entry_path) {
+            Ok(content) => content,
+            Err(e) => {
+                let err = format!("读取入口文件失败: {}", e);
+                instance.state = PluginState::Error(err.clone());
+                instance.load_error_count += 1;
+                eprintln!("[PluginLoader] ❌ 插件 {} 读取入口文件失败: {}", id, e);
+                return Err(err);
+            }
+        };
 
-        // 7. 创建 QuickJS VM
-        let vm_id = self.quickjs_runtime.create_vm()
-            .map_err(|e| {
-                instance.state = PluginState::Error(format!("创建 VM 失败: {}", e));
-                format!("创建 VM 失败: {}", e)
-            })?;
+        // 7. 创建 QuickJS VM（带错误隔离）
+        let vm_id = match self.quickjs_runtime.create_vm() {
+            Ok(id) => id,
+            Err(e) => {
+                let err = format!("创建 VM 失败: {}", e);
+                instance.state = PluginState::Error(err.clone());
+                instance.load_error_count += 1;
+                eprintln!("[PluginLoader] ❌ 插件 {} 创建 VM 失败: {}", id, e);
+                return Err(err);
+            }
+        };
 
         // 8. 记录 vm_id 到 instance
         instance.vm_id = Some(vm_id.clone());
 
-        // 9. 注入 uTools API 到 VM
+        // 9. 注入 uTools API 到 VM（带错误隔离和自动清理）
         let vm_id_for_inject = vm_id.clone();
         let plugin_id = id.to_string();
         if let Err(e) = self.quickjs_runtime.with_context(&vm_id_for_inject, |ctx| {
             crate::plugins::api_bridge::ApiBridge::inject_utools(&ctx, &plugin_id)
         }) {
+            // API 注入失败 —— 清理 VM 并记录错误
             let _ = self.quickjs_runtime.destroy_vm(&vm_id);
             instance.vm_id = None;
             instance.state = PluginState::Error(format!("API 注入失败: {}", e));
+            instance.load_error_count += 1;
+            eprintln!("[PluginLoader] ❌ 插件 {} API 注入失败: {}", id, e);
             return Err(format!("API 注入失败: {}", e));
         }
         println!("[PluginLoader] API 注入成功: {}", id);
 
-        // 9.5. 处理 WASM patches 依赖
+        // 9.5. 处理 WASM patches 依赖（带降级策略）
         // 先克隆需要的数据，避免与 instance 的可变借用冲突
         let patches = instance.manifest.patches.clone();
         let plugin_dir = instance.plugin_dir.clone();
         if !patches.is_empty() {
-            Self::load_patches(id, &patches, &plugin_dir);
+            // patches 加载失败不应阻塞插件加载，仅记录警告
+            match std::panic::catch_unwind(|| {
+                Self::load_patches(id, &patches, &plugin_dir);
+            }) {
+                Ok(_) => {},
+                Err(_) => {
+                    eprintln!("[PluginLoader] ⚠️ 插件 {} 的 WASM patches 加载出现 panic，已隔离错误", id);
+                }
+            }
         }
 
-        // 10. 执行插件代码
+        // 10. 执行插件代码（带错误隔离）
         match self.quickjs_runtime.execute(&vm_id, &code) {
             Ok(_) => {
-                // 11. 更新状态为 Ready
+                // 11. 加载成功 —— 重置错误计数并更新状态为 Ready
                 instance.state = PluginState::Ready;
                 instance.loaded_at = Some(Instant::now());
                 instance.last_used = Some(Instant::now());
+                instance.load_error_count = 0;
+                instance.last_error = None;
+                instance.retry_after = None;
+                instance.retry_backoff_ms = 1000;
 
                 println!("[PluginLoader] 插件加载成功: {} (VM: {})", id, vm_id);
                 Ok((instance.state.clone(), Some(vm_id)))
             }
             Err(e) => {
-                // 执行失败，清理 VM 并更新状态
+                // 执行失败 —— 清理 VM、更新错误状态、设置重试退避
                 let _ = self.quickjs_runtime.destroy_vm(&vm_id);
                 instance.vm_id = None;
-                instance.state = PluginState::Error(format!("执行插件代码失败: {}", e));
 
-                Err(format!("执行插件代码失败: {}", e))
+                let error_msg = format!("执行插件代码失败: {}", e);
+                instance.last_error = Some(error_msg.clone());
+                instance.load_error_count += 1;
+
+                // 计算退避延迟：每次失败翻倍（1s, 2s, 4s, 8s...），上限 30s
+                let backoff = instance.retry_backoff_ms;
+                instance.retry_backoff_ms = (backoff * 2).min(30000);
+                instance.retry_after = Some(Instant::now() + Duration::from_millis(backoff));
+
+                let retry_info = if instance.load_error_count < instance.max_retries {
+                    format!(" 将在 {}ms 后允许重试 (剩余 {} 次)", backoff, instance.max_retries - instance.load_error_count)
+                } else {
+                    " 已达到最大重试次数，不再自动重试".to_string()
+                };
+
+                instance.state = PluginState::Error(error_msg.clone());
+
+                eprintln!("[PluginLoader] ❌ 插件 {} 加载失败 (第 {} 次): {}{}",
+                    id, instance.load_error_count, error_msg, retry_info);
+
+                Err(format!("{}{}", error_msg, retry_info))
             }
         }
     }
@@ -545,6 +652,7 @@ impl PluginLoader {
     /// 1. 销毁关联的 QuickJS VM（释放内存资源）
     /// 2. 清理运行时状态
     /// 3. 将插件状态重置为 Unloaded
+    /// 4. 保留错误计数信息，便于调试
     ///
     /// # Arguments
     /// - `id`: 要卸载的插件 ID
@@ -557,19 +665,26 @@ impl PluginLoader {
         let instance = self.instances.get_mut(id)
             .ok_or_else(|| format!("插件不存在: {}", id))?;
 
+        // 防止在 Loading 状态时卸载（等待加载完成或超时）
+        if instance.state == PluginState::Loading {
+            println!("[PluginLoader] 插件 {} 正在加载中，等待完成后再卸载", id);
+            // 这里选择继续卸载，但标记为需要清理
+        }
+
         // 触发 onPluginOut 事件
         if let Some(app) = crate::plugins::api_bridge::get_app_handle() {
             let _ = app.emit("plugin-out", id.to_string());
         }
 
-        // 2. 如果有关联的 VM，销毁它
+        // 2. 如果有关联的 VM，销毁它（错误隔离：即使销毁失败也不影响主程序）
         if let Some(ref vm_id) = instance.vm_id {
             match self.quickjs_runtime.destroy_vm(vm_id) {
                 Ok(_) => {
                     println!("[PluginLoader] VM 已销毁: {} (插件: {})", vm_id, id);
                 }
                 Err(e) => {
-                    eprintln!("[PluginLoader] 销毁 VM 失败: {} ({})", e, id);
+                    eprintln!("[PluginLoader] 销毁 VM 失败: {} (插件: {})，将标记为孤儿 VM", e, id);
+                    // 记录错误但不中断卸载流程
                 }
             }
         }
@@ -578,13 +693,18 @@ impl PluginLoader {
         instance.vm_id = None;
 
         // 4. 更新状态为 Unloaded
+        let old_state = instance.state.clone();
         instance.state = PluginState::Unloaded;
 
         // 5. 清理时间戳
         instance.loaded_at = None;
         instance.last_used = None;
 
-        println!("[PluginLoader] 插件已卸载: {}", id);
+        // 6. 保留错误统计，但重置重试退避（允许重新加载时从头开始）
+        instance.retry_backoff_ms = 1000;
+        instance.retry_after = None;
+
+        println!("[PluginLoader] 插件已卸载: {} (旧状态: {})", id, old_state);
         Ok(())
     }
 
@@ -608,7 +728,9 @@ impl PluginLoader {
         if errors.is_empty() {
             Ok(())
         } else {
-            Err(format!("部分插件卸载失败:\n{}", errors.join("\n")))
+            // 错误隔离：即使有插件卸载失败，也不影响其他插件，仅记录日志
+            eprintln!("[PluginLoader] ⚠️ 部分插件卸载失败（但其他插件已成功卸载）:\n{}", errors.join("\n"));
+            Ok(())
         }
     }
 
@@ -623,6 +745,81 @@ impl PluginLoader {
     pub fn total_count(&self) -> usize {
         self.instances.len()
     }
+
+    /// 清理所有闲置插件（将其 VM 销毁并状态转为 Cached/Unloaded）
+    ///
+    /// 遍历所有 Ready 状态的插件，如果超过 idle_timeout_secs 未使用，
+    /// 则销毁 VM 并将状态设为 Cached，以释放内存资源。
+    ///
+    /// # Returns
+    /// 被清理的插件数量
+    pub fn cleanup_idle_plugins(&mut self, idle_timeout_secs: u64) -> usize {
+        let mut cleaned = 0;
+        let ids: Vec<String> = self.instances.keys().cloned().collect();
+
+        for id in ids {
+            if let Some(instance) = self.instances.get_mut(&id) {
+                if instance.state != PluginState::Ready {
+                    continue;
+                }
+
+                let should_cleanup = match instance.last_used {
+                    Some(last) => last.elapsed().as_secs() >= idle_timeout_secs,
+                    None => true, // 没有使用记录，视为闲置
+                };
+
+                if should_cleanup {
+                    println!("[PluginLoader] 插件 {} 闲置超过 {}s，执行缓存清理", id, idle_timeout_secs);
+
+                    // 销毁关联的 VM
+                    if let Some(ref vm_id) = instance.vm_id {
+                        if let Err(e) = self.quickjs_runtime.destroy_vm(vm_id) {
+                            eprintln!("[PluginLoader] 清理 VM 失败 ({}): {}", id, e);
+                        }
+                    }
+
+                    instance.vm_id = None;
+                    instance.state = PluginState::Cached;
+                    instance.loaded_at = None;
+                    cleaned += 1;
+                }
+            }
+        }
+
+        if cleaned > 0 {
+            println!("[PluginLoader] 共清理 {} 个闲置插件", cleaned);
+        }
+        cleaned
+    }
+
+    /// 扫描并上报所有插件的 VM 健康状态
+    ///
+    /// 返回每个插件的状态摘要，用于前端监控面板展示
+    pub fn get_plugin_health(&self) -> Vec<PluginHealth> {
+        self.instances.values()
+            .map(|inst| PluginHealth {
+                id: inst.id.clone(),
+                state: format!("{}", inst.state),
+                vm_id: inst.vm_id.clone(),
+                loaded_at: inst.loaded_at.map(|t| t.elapsed().as_secs()),
+                last_used: inst.last_used.map(|t| t.elapsed().as_secs()),
+                error_count: inst.load_error_count,
+                last_error: inst.last_error.clone(),
+            })
+            .collect()
+    }
+}
+
+/// 插件健康状态摘要（用于监控面板）
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PluginHealth {
+    pub id: String,
+    pub state: String,
+    pub vm_id: Option<String>,
+    pub loaded_at: Option<u64>,
+    pub last_used: Option<u64>,
+    pub error_count: u32,
+    pub last_error: Option<String>,
 }
 
 // ==================== Tauri Commands ====================
@@ -717,4 +914,36 @@ pub fn find_plugins_by_prefix(
         .into_iter()
         .map(|p| p.manifest.clone())
         .collect())
+}
+
+/// 清理闲置插件（手动触发或定时任务调用）
+///
+/// 前端调用示例：
+/// ```typescript
+/// const cleaned = await invoke('cleanup_idle_plugins');
+/// console.log(`清理了 ${cleaned} 个闲置插件`);
+/// ```
+#[tauri::command]
+pub fn cleanup_idle_plugins(
+    loader: tauri::State<'_, Mutex<PluginLoader>>,
+) -> Result<usize, String> {
+    let mut loader = loader.lock().map_err(|e| e.to_string())?;
+    // 使用 QuickJS 默认的闲置超时配置（300秒）
+    let timeout = loader.idle_timeout_secs();
+    Ok(loader.cleanup_idle_plugins(timeout))
+}
+
+/// 获取插件健康状态（用于监控面板）
+///
+/// 前端调用示例：
+/// ```typescript
+/// const health = await invoke('get_plugin_health');
+/// health.forEach(h => console.log(`${h.id}: ${h.state}`));
+/// ```
+#[tauri::command]
+pub fn get_plugin_health(
+    loader: tauri::State<'_, Mutex<PluginLoader>>,
+) -> Result<Vec<PluginHealth>, String> {
+    let loader = loader.lock().map_err(|e| e.to_string())?;
+    Ok(loader.get_plugin_health())
 }

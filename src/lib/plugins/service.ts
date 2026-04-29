@@ -220,12 +220,12 @@ class PluginService {
       );
 
       // 如果返回的是错误对象，抛出异常
-      const raw = result as Record<string, unknown>;
+      const raw = result as unknown as Record<string, unknown>;
       if (raw.error) {
         throw new Error(String(raw.error));
       }
 
-      console.log(`[PluginService] ✅ 插件 ${pluginId} 返回 ${(raw as unknown[]).length} 个结果`);
+      console.log(`[PluginService] ✅ 插件 ${pluginId} 返回 ${(result as unknown[]).length} 个结果`);
       return result as PluginSearchResult[];
 
     } catch (e) {
@@ -254,7 +254,7 @@ class PluginService {
         'action'
       );
 
-      console.log(`[PluginService] ✅ 插件 ${pluginId}.${action} 执行完成:`, (result as Record<string, unknown>)?.type ?? 'unknown');
+      console.log(`[PluginService] ✅ 插件 ${pluginId}.${action} 执行完成:`, (result as unknown as Record<string, unknown>)?.type ?? 'unknown');
       return result;
 
     } catch (e) {

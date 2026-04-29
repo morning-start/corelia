@@ -25,7 +25,7 @@ use services::WindowService;
 // 导入 QuickJS 运行时管理器
 use plugins::quickjs_runtime::{
     QuickJSRuntime, quickjs_create_vm, quickjs_destroy_vm, quickjs_execute,
-    quickjs_active_count, quickjs_cleanup,
+    quickjs_active_count, quickjs_cleanup, quickjs_cleanup_all, quickjs_vm_stats,
 };
 
 // 导入 API 桥接层
@@ -34,7 +34,7 @@ use plugins::api_bridge::inject_apis_to_vm;
 // 导入插件加载器
 use plugins::loader::{
     PluginLoader, scan_plugins, get_plugin_list, load_plugin, unload_plugin,
-    find_plugins_by_prefix,
+    find_plugins_by_prefix, cleanup_idle_plugins, get_plugin_health,
 };
 
 // 导入插件注册表
@@ -135,6 +135,8 @@ pub fn run() {
             quickjs_execute,
             quickjs_active_count,
             quickjs_cleanup,
+            quickjs_cleanup_all,
+            quickjs_vm_stats,
             // API 注入
             inject_apis_to_vm,
             // WASM 桥接
@@ -151,6 +153,8 @@ pub fn run() {
             load_plugin,
             unload_plugin,
             find_plugins_by_prefix,
+            cleanup_idle_plugins,
+            get_plugin_health,
             // 插件注册表查询
             search_plugins_by_prefix,
             get_active_plugins,
