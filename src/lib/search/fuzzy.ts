@@ -8,13 +8,35 @@ export interface SearchItem {
   category: string;
 }
 
+/** 判断字符串是否包含中文字符 */
+function containsChinese(str: string): boolean {
+  return /[\u4e00-\u9fa5]/.test(str);
+}
+
+/** 拼音索引缓存 */
+const pinyinCache = new Map<string, string>();
+
+/** 获取字符串的拼音（带缓存） */
+function getPinyin(str: string): string {
+  if (!containsChinese(str)) {
+    return str; // 无中文，直接返回原字符串
+  }
+  const cached = pinyinCache.get(str);
+  if (cached) return cached;
+  const result = pinyin(str, { toneType: 'none' }).replace(/\s+/g, '');
+  pinyinCache.set(str, result);
+  return result;
+}
+
 export function search(query: string, items: SearchItem[]): FilterResult<SearchItem>[] {
-  const queryPinyin = pinyin(query, { toneType: 'none' }).replace(/\s+/g, '');
+  // 如果查询词不含中文，跳过拼音转换
+  const queryHasChinese = containsChinese(query);
+  const queryPinyin = queryHasChinese ? getPinyin(query) : query;
 
   return filter(query, items, {
     extract: (item) => {
-      const namePinyin = pinyin(item.name, { toneType: 'none' }).replace(/\s+/g, '');
-      const descPinyin = pinyin(item.description, { toneType: 'none' }).replace(/\s+/g, '');
+      const namePinyin = getPinyin(item.name);
+      const descPinyin = getPinyin(item.description);
       return `${item.name} ${namePinyin} ${item.description} ${descPinyin}`;
     },
   });

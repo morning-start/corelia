@@ -93,24 +93,30 @@ class SearchStore {
         console.log(`[SearchStore] ✅ 找到 ${matchedPlugins.length} 个匹配插件:`,
           matchedPlugins.map(p => p.name));
 
-        const allPluginResults: PluginSearchResult[] = [];
-
-        for (const plugin of matchedPlugins) {
+        // 并行执行所有插件搜索，提高响应速度
+        const searchPromises = matchedPlugins.map(async (plugin) => {
           try {
             const results = await pluginService.executeSearch(plugin.name, query);
-            const enrichedResults = results.map(r => ({
+            const enrichedResults: PluginSearchResult[] = results.map(r => ({
               ...r,
               pluginId: plugin.name,
               pluginName: plugin.description || plugin.name
             }));
-            allPluginResults.push(...enrichedResults);
             console.log(`[SearchStore] ✅ 插件 ${plugin.name} 返回 ${results.length} 个结果`);
+            return enrichedResults;
           } catch (e) {
             console.error(`[SearchStore] ❌ 插件 ${plugin.name} 搜索失败:`, e);
+            return [] as PluginSearchResult[];
+          }
+        });
+
+        const settledResults = await Promise.allSettled(searchPromises);
+        const allPluginResults: PluginSearchResult[] = [];
+        for (const result of settledResults) {
+          if (result.status === 'fulfilled') {
+            allPluginResults.push(...result.value);
           }
         }
-
-        this.pluginResults = allPluginResults;
         console.log(`[SearchStore] ✅ 插件搜索完成，共 ${allPluginResults.length} 个结果`);
         this.mergeResults();
 
