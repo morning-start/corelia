@@ -2,6 +2,43 @@
 
 > 本文档聚焦于 **MVP 核心框架阶段**（阶段一）的当前任务。
 > 更新频率：每周评审，任务完成后归档。
+>
+> 另有架构优化报告见 [`docs/analysis/ARCHITECTURE_OPTIMIZATION_REPORT.md`](docs/analysis/ARCHITECTURE_OPTIMIZATION_REPORT.md)
+
+---
+
+## 📋 架构优化未完成任务（来自优化报告）
+
+> 短期优化（1-2周）项已全部完成 ✅，以下为中期和长期待办项。
+
+### 中期优化（2-4周）
+
+| 任务 | 状态 | 优先级 | 影响 | 关联文件 |
+|------|:----:|:------:|:----:|----------|
+| `api_bridge.rs` 模块化拆分（当前42.5KB，拆分为12个子模块） | ⬜ | P0 | 可维护性↑ | [`api_bridge.rs`](src-tauri/src/plugins/api_bridge.rs) |
+| `loader.rs` 模块化拆分（拆分为7个子模块） | ⬜ | P1 | 可维护性↑ | [`loader.rs`](src-tauri/src/plugins/loader.rs) |
+| 搜索 Store 解耦重构（拆分为system/plugin/merger独立模块） | ⬜ | P1 | 可测试性↑ | [`search.ts`](src/lib/stores/search.ts) |
+| `executor` 服务拆分（职责过重，拆为system/setting/plugin） | ⬜ | P2 | 可维护性↑ | [`executor.ts`](src/lib/services/executor.ts) |
+| Store 迁移至 Svelte 5 Runes（theme.ts/history.ts 使用 writable） | ⬜ | P2 | 现代化 | [`theme.ts`](src/lib/stores/theme.ts), [`history.ts`](src/lib/stores/history.ts) |
+
+### 长期优化（1-2月）
+
+| 任务 | 状态 | 优先级 | 影响 | 关联文件 |
+|------|:----:|:------:|:----:|----------|
+| QuickJS `unsafe impl Send/Sync` 移除（当前3处，逐步迁移到Mutex） | ⬜ | P0 | 安全性↑↑ | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs), [`loader.rs`](src-tauri/src/plugins/loader.rs) |
+| 多线程 VM 支持 | ⬜ | P1 | 性能↑↑ | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
+| WASM Promise 异步支持（替代轮询方案） | ⬜ | P1 | 性能↑↑ | [`wasm_bridge.rs`](src-tauri/src/plugins/wasm_bridge.rs), [`api_bridge.rs`](src-tauri/src/plugins/api_bridge.rs) |
+| 插件热重载 | ⬜ | P2 | 开发体验↑ | 新增模块 |
+| 增量搜索索引（预构建拼音索引，避免每次重建） | ⬜ | P2 | 性能↑ | [`fuzzy.ts`](src/lib/search/fuzzy.ts) |
+
+### 低优先级性能项（文档3.3节）
+
+| 任务 | 状态 | 优先级 | 说明 |
+|------|:----:|:------:|------|
+| 插件目录 IO 缓存（监听文件系统 mtime） | ⬜ | P2 | `loader.rs:scan_plugins()` 每次调用都读取目录 |
+| Clipboard 全局实例复用 | ⬜ | P3 | `api_bridge.rs:166` 每次新建实例 |
+| History 增量写入 | ⬜ | P3 | `history.ts:70` 每次全量写入 |
+| 通知改用 tauri-plugin-notification | ⬜ | P3 | 替代当前 powershell 方案 |
 
 ---
 
