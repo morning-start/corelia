@@ -67,9 +67,9 @@
 
 | 任务 | 状态 | 优先级 | 说明 | 关联文件 |
 |------|:----:|:------:|------|----------|
-| 定义前后端职责边界文档 | ⬜ | P0 | 明确哪些逻辑在前端，哪些在后端 | [`wiki/ARCHITECTURE.md`](wiki/ARCHITECTURE.md) |
-| 统一错误处理策略 | ⬜ | P1 | 前端负责展示，后端负责记录和上报 | [`errors.ts`](src/lib/utils/errors.ts), [`error.rs`](src-tauri/src/error.rs) |
-| 配置管理职责明确 | ⬜ | P1 | 后端负责持久化，前端负责展示和编辑 | [`config/`](src-tauri/src/commands/config/), [`stores/user.ts`](src/lib/stores/user.ts) |
+| 定义前后端职责边界文档 | ✅ | P0 | 明确哪些逻辑在前端，哪些在后端 | [`wiki/ARCHITECTURE.md`](wiki/ARCHITECTURE.md) |
+| 统一错误处理策略 | ✅ | P1 | 前端负责展示，后端负责记录和上报 | [`errors.ts`](src/lib/utils/errors.ts), [`error.rs`](src-tauri/src/error.rs) |
+| 配置管理职责明确 | ✅ | P1 | 后端负责持久化，前端负责展示和编辑 | [`config/`](src-tauri/src/commands/config/), [`stores/user.ts`](src/lib/stores/user.ts) |
 
 ---
 
@@ -198,6 +198,6 @@
 
 ---
 
-*文档版本: 1.4*  
+*文档版本: 1.5*  
 *最后更新: 2026-04-29*  
-*状态: 活跃* | *职责划分优化任务全部完成*
+*状态: 活跃* | *职责划分优化任务全部完成！🎉*
