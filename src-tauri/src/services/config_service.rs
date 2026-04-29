@@ -9,7 +9,7 @@
 
 use serde_json::Value;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 
@@ -86,19 +86,19 @@ impl ConfigService {
         Ok(base_dir)
     }
 
-    fn system_config_path(base_dir: &PathBuf) -> PathBuf {
+    fn system_config_path(base_dir: &Path) -> PathBuf {
         base_dir.join("config.system.json")
     }
 
-    fn user_config_path(base_dir: &PathBuf) -> PathBuf {
+    fn user_config_path(base_dir: &Path) -> PathBuf {
         base_dir.join("config.user.json")
     }
 
-    fn app_config_path(cache_dir: &PathBuf) -> PathBuf {
+    fn app_config_path(cache_dir: &Path) -> PathBuf {
         cache_dir.join("app.json")
     }
 
-    fn init_config_file(path: &PathBuf, default: Value) -> Result<(), String> {
+    fn init_config_file(path: &Path, default: Value) -> Result<(), String> {
         if !path.exists() {
             let json = serde_json::to_string_pretty(&default)
                 .map_err(|e| e.to_string())?;

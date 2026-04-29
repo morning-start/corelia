@@ -351,8 +351,8 @@ pub async fn quickjs_cleanup(
     runtime.cleanup()
 }
 
-/// 将 rquickjs::Value 转换为 serde_json::Value
-fn convert_value_to_json(value: Value) -> serde_json::Value {
+/// 将 rquickjs::Value 转换为 serde_json::Value（crate 内部共享）
+pub(crate) fn convert_value_to_json(value: Value) -> serde_json::Value {
     // 尝试按类型转换
     if value.is_null() || value.is_undefined() {
         return serde_json::Value::Null;

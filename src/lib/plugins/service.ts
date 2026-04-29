@@ -12,6 +12,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { PluginManifest, PluginSearchResult } from './types';
 
+/** 插件动作执行结果 */
+export interface PluginActionResult {
+  type: 'text' | 'error' | 'html' | 'copy';
+  message?: string;
+  data?: unknown;
+  [key: string]: unknown;
+}
+
 /**
  * VM 缓存项
  */
@@ -212,11 +220,12 @@ class PluginService {
       );
 
       // 如果返回的是错误对象，抛出异常
-      if ((result as any).error) {
-        throw new Error((result as any).error);
+      const raw = result as Record<string, unknown>;
+      if (raw.error) {
+        throw new Error(String(raw.error));
       }
 
-      console.log(`[PluginService] ✅ 插件 ${pluginId} 返回 ${(result as any[]).length} 个结果`);
+      console.log(`[PluginService] ✅ 插件 ${pluginId} 返回 ${(raw as unknown[]).length} 个结果`);
       return result as PluginSearchResult[];
 
     } catch (e) {
@@ -232,19 +241,20 @@ class PluginService {
    * @param action - 动作名称（如 "sayHello"、"testStorage"）
    * @returns 动作执行结果
    */
-  async executeAction(pluginId: string, action: string): Promise<any> {
+  async executeAction(pluginId: string, action: string, data?: unknown): Promise<PluginActionResult> {
     console.log(`[PluginService] ⚡ 执行插件动作: ${pluginId}.${action}`);
 
     try {
-      const result = await this.executeInVm(
+      const defaultResult: PluginActionResult = { type: 'error', message: '无返回值' };
+      const result = await this.executeInVm<PluginActionResult>(
         pluginId,
         'onAction',
-        action,
-        { type: 'error', message: '无返回值' },
+        JSON.stringify({ action, data }),
+        defaultResult,
         'action'
       );
 
-      console.log(`[PluginService] ✅ 插件 ${pluginId}.${action} 执行完成:`, result.type);
+      console.log(`[PluginService] ✅ 插件 ${pluginId}.${action} 执行完成:`, (result as Record<string, unknown>)?.type ?? 'unknown');
       return result;
 
     } catch (e) {

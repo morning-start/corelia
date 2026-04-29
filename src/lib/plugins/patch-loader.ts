@@ -26,9 +26,9 @@ import type {
 
 // ==================== 内部类型 ====================
 
-/** WASM 模块实例 */
+/** WASM 模块实例（导出的函数集合） */
 interface WasmModuleInstance {
-  [funcName: string]: (...args: any[]) => any;
+  [funcName: string]: (...args: unknown[]) => unknown;
 }
 
 /** 已加载的 patch 记录 */
@@ -202,7 +202,7 @@ class PatchLoader {
       for (const [name, exp] of Object.entries(exports)) {
         if (typeof exp === 'function') {
           // 直接暴露 WASM 导出函数
-          wrappedModule[name] = (...args: any[]) => {
+          wrappedModule[name] = (...args: unknown[]) => {
             try {
               return (exp as Function)(...args);
             } catch (e) {
@@ -280,7 +280,7 @@ class PatchLoader {
       }
 
       // 解析参数
-      let parsedArgs: any[];
+      let parsedArgs: unknown[];
       try {
         parsedArgs = JSON.parse(argsJson);
         if (!Array.isArray(parsedArgs)) {

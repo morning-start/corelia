@@ -25,8 +25,9 @@ use crate::plugins::api_bridge::get_app_handle;
 static WASM_CALL_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// 生成唯一的 WASM 调用请求 ID
+#[inline]
 pub fn generate_request_id() -> String {
-    format!("wasm_req_{}", WASM_CALL_COUNTER.fetch_add(1, Ordering::Relaxed))
+    format!("wasm_req_{}", WASM_CALL_COUNTER.fetch_add(1, Ordering::AcqRel))
 }
 
 /// 已注册的 WASM 函数信息

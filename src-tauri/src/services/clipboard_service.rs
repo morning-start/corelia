@@ -1,22 +1,29 @@
 //! 剪贴板服务模块
-//! 
+//!
 //! 封装剪贴板操作
 
 use arboard::Clipboard;
+use std::sync::Mutex;
 
-/// 剪贴板服务（无状态）
+static CLIPBOARD_INSTANCE: std::sync::OnceLock<Mutex<Clipboard>> = std::sync::OnceLock::new();
+
+fn get_clipboard() -> Result<std::sync::MutexGuard<'static, Clipboard>, String> {
+    let instance = CLIPBOARD_INSTANCE.get_or_init(|| {
+        Mutex::new(Clipboard::new().expect("Failed to initialize clipboard"))
+    });
+    instance.lock().map_err(|e| e.to_string())
+}
+
 pub struct ClipboardService;
 
 impl ClipboardService {
-    /// 读取剪贴板文本
     pub fn read() -> Result<String, String> {
-        let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+        let mut clipboard = get_clipboard()?;
         clipboard.get_text().map_err(|e| e.to_string())
     }
-    
-    /// 写入剪贴板文本
+
     pub fn write(text: String) -> Result<(), String> {
-        let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+        let mut clipboard = get_clipboard()?;
         clipboard.set_text(text).map_err(|e| e.to_string())
     }
 }

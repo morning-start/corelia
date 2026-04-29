@@ -19,7 +19,7 @@ use tauri::{
     tray::TrayIconBuilder,
 };
 use std::path::PathBuf;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use services::WindowService;
 
 // 导入 QuickJS 运行时管理器
@@ -60,13 +60,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .manage(QuickJSRuntime::new())  // 注册 QuickJS 运行时管理器（单例，供 Commands 直接使用）
-        .manage(Mutex::new(PluginLoader::new(
-            PathBuf::from("plugins"),
-            // 注意：Loader 内部会使用独立的 runtime 实例
-            // Commands 通过 State<QuickJSRuntime> 访问的实例与 Loader 内部的不同
-            // 这是已知限制，后续重构为 Arc 共享时可统一
-            QuickJSRuntime::new()
-        )))  // 注册插件加载器
+        .manage({
+            // 创建共享的 Arc<QuickJSRuntime> 实例
+            let shared_runtime = Arc::new(QuickJSRuntime::new());
+            Mutex::new(PluginLoader::new(
+                PathBuf::from("plugins"),
+                shared_runtime,  // Loader 与 State 共享同一 Runtime 实例
+            ))
+        })  // 注册插件加载器
         .manage(RwLock::new(PluginRegistry::new()))  // 注册插件注册表
         .manage(Mutex::new(WasmBridge::new()))  // 注册 WASM 桥接
         .setup(|app| {
@@ -88,7 +89,7 @@ pub fn run() {
             let icon_image = Image::new(rgba.as_slice(), width, height);
 
             // 初始化配置目录 (首次启动时创建配置文件)
-            match services::ConfigService::init_config_directory(&app.handle()) {
+            match services::ConfigService::init_config_directory(app.handle()) {
                 Ok(config_dir) => {
                     println!("配置目录：{:?}", config_dir);
                 }
@@ -97,8 +98,7 @@ pub fn run() {
                 }
             }
 
-            // 初始化窗口状态
-            WindowService::init_state(&app.handle())?;
+            WindowService::init_state(app.handle())?;
 
             // 创建托盘图标
             let _tray = TrayIconBuilder::new()
@@ -121,7 +121,7 @@ pub fn run() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        let _ = WindowService::toggle(&app);
+                        let _ = WindowService::toggle(app);
                     }
                 })
                 .build(app)?;

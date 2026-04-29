@@ -5,8 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::Emitter;
 
@@ -123,8 +123,8 @@ pub struct PluginLoader {
     plugins_dir: PathBuf,
     /// 所有已发现的插件实例（plugin_id -> instance）
     instances: HashMap<String, PluginInstance>,
-    /// QuickJS 运行时引用（用于创建/销毁 VM）
-    quickjs_runtime: QuickJSRuntime,
+    /// QuickJS 运行时共享引用（与 Tauri State 中的 QuickJSRuntime 为同一实例）
+    quickjs_runtime: Arc<QuickJSRuntime>,
 }
 
 // 安全性说明：PluginLoader 通过 Tauri State 管理，所有操作在主线程执行，
@@ -137,19 +137,18 @@ impl PluginLoader {
     ///
     /// # Arguments
     /// - `plugins_dir`: 插件根目录路径
-    /// - `runtime`: QuickJS 运行时管理器引用
-    ///
-    /// # Example
-    /// ```rust
-    /// let runtime = QuickJSRuntime::new();
-    /// let loader = PluginLoader::new(PathBuf::from("plugins"), runtime);
-    /// ```
-    pub fn new(plugins_dir: PathBuf, runtime: QuickJSRuntime) -> Self {
+    /// - `runtime`: QuickJS 运行时管理器的 Arc 共享引用
+    pub fn new(plugins_dir: PathBuf, runtime: Arc<QuickJSRuntime>) -> Self {
         Self {
             plugins_dir,
             instances: HashMap::new(),
             quickjs_runtime: runtime,
         }
+    }
+
+    /// 获取内部 QuickJSRuntime 的 Arc 引用（供外部 Commands 共享使用）
+    pub fn runtime(&self) -> &Arc<QuickJSRuntime> {
+        &self.quickjs_runtime
     }
 
     /// 扫描所有插件（仅加载元数据，懒加载策略）
@@ -250,7 +249,7 @@ impl PluginLoader {
     /// # Returns
     /// - `Ok(PluginManifest)`: 解析成功后的元数据
     /// - `Err(String)`: 错误信息（缺少必填字段、JSON 格式错误等）
-    fn parse_plugin_json(&self, plugin_path: &PathBuf) -> Result<PluginManifest, String> {
+    fn parse_plugin_json(&self, plugin_path: &Path) -> Result<PluginManifest, String> {
         // 1. 构建 plugin.json 完整路径
         let json_path = plugin_path.join("plugin.json");
 
@@ -468,7 +467,7 @@ impl PluginLoader {
     /// 2. 读取 patch 的 package.json 获取元数据
     /// 3. 通过 Tauri event 通知前端加载 WASM 模块
     /// 4. 前端在 WebView 中初始化 WebAssembly 并注册函数到 WasmBridge
-    fn load_patches(plugin_id: &str, patches: &[String], plugin_dir: &PathBuf) {
+    fn load_patches(plugin_id: &str, patches: &[String], plugin_dir: &Path) {
         for patch_name in patches {
             println!("[PluginLoader] 📦 加载 WASM patch: {} (插件: {})", patch_name, plugin_id);
 
