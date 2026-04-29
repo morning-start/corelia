@@ -34,7 +34,7 @@ use plugins::api_bridge::inject_apis_to_vm;
 // 导入插件加载器
 use plugins::loader::{
     PluginLoader, scan_plugins, get_plugin_list, load_plugin, unload_plugin,
-    find_plugins_by_prefix, cleanup_idle_plugins, get_plugin_health,
+    find_plugins_by_prefix, cleanup_idle_plugins, get_plugin_health, plugin_execute,
 };
 
 // 导入插件注册表
@@ -155,6 +155,7 @@ pub fn run() {
             find_plugins_by_prefix,
             cleanup_idle_plugins,
             get_plugin_health,
+            plugin_execute,
             // 插件注册表查询
             search_plugins_by_prefix,
             get_active_plugins,

@@ -792,26 +792,48 @@ fn inject_wasm_api<'js>(ctx: &Ctx<'js>, parent: &Object<'js>) -> Result<(), Stri
     ).map_err(|e| format!("创建 __wasm_call 函数失败: {}", e))?;
     wasm_obj.set("__wasm_call", call_fn).map_err(|e| format!("设置 __wasm_call 失败: {}", e))?;
 
-    // __wasm_get_result(requestId) — 轮询获取 WASM 调用结果
+    // __wasm_get_result(requestId, maxWaitMs?) — 轮询获取 WASM 调用结果
     // 返回 JSON 字符串表示结果，null 表示结果尚未就绪
+    // maxWaitMs: 最大等待时间（毫秒），支持退避轮询以节省 CPU
     let get_result_fn = Function::new(
         ctx.clone(),
-        |_ctx: Ctx<'js>, request_id: String| -> Result<Option<String>, rquickjs::Error> {
+        |_ctx: Ctx<'js>, request_id: String, max_wait_ms: Option<i64>| -> Result<Option<String>, rquickjs::Error> {
             let app = require_app!("__wasm_get_result");
-            let bridge = app.state::<Mutex<WasmBridge>>();
-            let mut bridge_ref = bridge.lock().map_err(|e| rquickjs::Error::new_from_js_message(
-                "__wasm_get_result", "Error", format!("获取 WasmBridge 锁失败: {}", e)
-            ))?;
+            let max_wait = max_wait_ms.map(|v| v.max(0) as u64).unwrap_or(0);
+            let start = std::time::Instant::now();
 
-            match bridge_ref.get_call_result(&request_id) {
-                Some(entry) => {
-                    serde_json::to_string(&entry)
-                        .map(Some)
-                        .map_err(|e| rquickjs::Error::new_from_js_message(
-                            "__wasm_get_result", "Error", format!("序列化结果失败: {}", e)
-                        ))
+            // 退避轮询策略：初始 10ms，指数增长到 100ms 上限
+            let mut poll_interval = 10u64;
+            const MAX_POLL_INTERVAL: u64 = 100;
+
+            loop {
+                {
+                    let bridge = app.state::<Mutex<WasmBridge>>();
+                    let mut bridge_ref = bridge.lock().map_err(|e| rquickjs::Error::new_from_js_message(
+                        "__wasm_get_result", "Error", format!("获取 WasmBridge 锁失败: {}", e)
+                    ))?;
+
+                    match bridge_ref.get_call_result(&request_id) {
+                        Some(entry) => {
+                            return serde_json::to_string(&entry)
+                                .map(Some)
+                                .map_err(|e| rquickjs::Error::new_from_js_message(
+                                    "__wasm_get_result", "Error", format!("序列化结果失败: {}", e)
+                                ));
+                        }
+                        None if max_wait == 0 => return Ok(None),
+                        None => {},
+                    }
+                } // 锁在此释放
+
+                // 检查是否超过最大等待时间
+                if max_wait > 0 && start.elapsed().as_millis() as u64 >= max_wait {
+                    return Ok(None);
                 }
-                None => Ok(None),
+
+                // 退避延迟
+                std::thread::sleep(std::time::Duration::from_millis(poll_interval));
+                poll_interval = (poll_interval * 2).min(MAX_POLL_INTERVAL);
             }
         },
     ).map_err(|e| format!("创建 __wasm_get_result 函数失败: {}", e))?;

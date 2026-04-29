@@ -947,3 +947,43 @@ pub fn get_plugin_health(
     let loader = loader.lock().map_err(|e| e.to_string())?;
     Ok(loader.get_plugin_health())
 }
+
+/// 在指定插件的 VM 中执行 JS 代码
+///
+/// 前端无需管理 VM ID，只需传入 plugin_id，后端会自动找到对应的 VM 并执行。
+/// 这是前端移除 VM 缓存后的主要执行接口。
+///
+/// 前端调用示例：
+/// ```typescript
+/// const result = await invoke('plugin_execute', {
+///     pluginId: 'hello-world',
+///     code: 'onSearch("hello")'
+/// });
+/// ```
+#[tauri::command]
+pub fn plugin_execute(
+    loader: tauri::State<'_, Mutex<PluginLoader>>,
+    plugin_id: String,
+    code: String,
+) -> Result<serde_json::Value, String> {
+    let loader = loader.lock().map_err(|e| e.to_string())?;
+
+    // 1. 查找插件
+    let instance = loader.get_plugin(&plugin_id)
+        .ok_or_else(|| format!("插件不存在: {}", plugin_id))?;
+
+    // 2. 获取插件的 vm_id
+    let vm_id = instance.vm_id.as_ref()
+        .ok_or_else(|| format!("插件 {} 未加载或 VM 未创建", plugin_id))?;
+
+    // 3. 检查插件状态
+    if !matches!(instance.state, PluginState::Ready | PluginState::Cached) {
+        return Err(format!("插件 {} 当前状态不可用: {:?}", plugin_id, instance.state));
+    }
+
+    // 4. 执行代码（通过 QuickJSRuntime）
+    let result = loader.runtime().execute(vm_id, &code)
+        .map_err(|e| format!("执行失败: {}", e))?;
+
+    Ok(result)
+}

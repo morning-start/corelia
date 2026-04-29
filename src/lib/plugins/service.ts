@@ -6,7 +6,9 @@
  * - 插件生命周期管理（扫描、加载、卸载）
  * - 插件搜索（按前缀匹配）
  * - 插件执行（调用 onSearch/onAction）
- * - VM 管理（创建/销毁/复用）
+ *
+ * 注意：VM 生命周期完全由后端管理，前端不做任何 VM 缓存，
+ * 避免前后端缓存不一致导致的问题。
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -18,16 +20,6 @@ export interface PluginActionResult {
   message?: string;
   data?: unknown;
   [key: string]: unknown;
-}
-
-/**
- * VM 缓存项
- */
-interface VmCacheEntry {
-  vmId: string;
-  pluginId: string;
-  createdAt: number;
-  lastUsedAt: number;
 }
 
 /**
@@ -53,12 +45,6 @@ interface VmCacheEntry {
 class PluginService {
   /** 是否已初始化 */
   private initialized = false;
-
-  /** VM 缓存池（避免重复创建） */
-  private vmCache: Map<string, VmCacheEntry> = new Map();
-
-  /** 最大缓存 VM 数量 */
-  private readonly MAX_VM_CACHE_SIZE = 10;
 
   /** 已加载的插件 ID 集合（用于跳过冗余 load 调用） */
   private loadedPlugins: Set<string> = new Set();
@@ -143,18 +129,6 @@ class PluginService {
     console.log(`[PluginService] 📦 加载插件: ${id}`);
     const result = await invoke<{ state: string; vm_id?: string }>('load_plugin', { id });
 
-    // 缓存后端返回的 vm_id（如果有的话），避免前端再重复创建 VM
-    if (result.vm_id && !this.vmCache.has(id)) {
-      const now = Date.now();
-      this.vmCache.set(id, {
-        vmId: result.vm_id,
-        pluginId: id,
-        createdAt: now,
-        lastUsedAt: now
-      });
-      console.log(`[PluginService] 📌 已缓存后端创建的 VM: ${result.vm_id} (插件: ${id})`);
-    }
-
     console.log(`[PluginService] ✅ 插件 ${id} 状态: ${result.state}`);
     return result.state;
   }
@@ -163,15 +137,11 @@ class PluginService {
    * 卸载指定插件
    *
    * 会销毁关联的 QuickJS VM，释放内存资源。
-   * 同时清理本地 VM 缓存。
    *
    * @param id - 插件 ID
    */
   async unload(id: string): Promise<void> {
     console.log(`[PluginService] 🗑️ 卸载插件: ${id}`);
-
-    // 清理 VM 缓存
-    this.clearVmCache(id);
 
     // 清理本地已加载状态
     this.loadedPlugins.delete(id);
@@ -272,6 +242,8 @@ class PluginService {
    * 安全性：参数通过 JSON.stringify/JSON.parse 双向序列化传入，
    * 彻底防止 JS 代码注入攻击。
    *
+   * VM 由后端统一管理，前端仅通过后端命令执行代码。
+   *
    * @param pluginId - 插件 ID
    * @param fnName - 要调用的函数名（如 "onSearch"、"onAction"）
    * @param arg - 传递给函数的参数（将被 JSON 安全编码）
@@ -288,10 +260,7 @@ class PluginService {
   ): Promise<T> {
     await this.ensureLoaded(pluginId);
 
-    const vmId = await this.getOrCreateVm(pluginId);
-
-    // 使用 JSON.stringify 安全编码参数，在 VM 内部通过 JSON.parse 解码
-    // 这样无论 arg 包含什么特殊字符都不会导致代码注入
+    // 通过后端命令执行插件代码，VM 生命周期由后端完全管理
     const safeArg = JSON.stringify(arg);
     const safeDefault = JSON.stringify(defaultResult);
     const code = `
@@ -311,134 +280,21 @@ class PluginService {
       })()
     `;
 
-    const rawResult = await invoke<string>('quickjs_execute', { vmId, code });
+    const rawResult = await invoke<string>('plugin_execute', { pluginId, code });
     return JSON.parse(rawResult);
   }
 
   /**
-   * 获取或创建插件的 VM（带缓存机制）
+   * 获取插件健康状态（替代已移除的 VM 缓存状态）
    *
-   * 缓存策略：
-   * - 首次调用时创建新 VM 并缓存
-   * - 后续调用直接使用缓存的 VM
-   * - 当缓存超过上限时，清除最久未使用的 VM
-   *
-   * @param pluginId - 插件 ID
-   * @returns VM ID
+   * @returns 活跃 VM 数量和空 entries（前端不再缓存 VM）
    */
-  private async getOrCreateVm(pluginId: string): Promise<string> {
-    // 检查缓存中是否已有该插件的 VM
-    const cached = this.vmCache.get(pluginId);
-    if (cached) {
-      // 更新最后使用时间
-      cached.lastUsedAt = Date.now();
-      console.log(`[PluginService] ♻️ 复用缓存的 VM: ${cached.vmId} (插件: ${pluginId})`);
-      return cached.vmId;
-    }
-
-    // 缓存未命中，检查是否需要清理
-    if (this.vmCache.size >= this.MAX_VM_CACHE_SIZE) {
-      this.evictOldestVm();
-    }
-
-    // 创建新的 VM
-    const vmId = await invoke<string>('quickjs_create_vm');
-
-    // 注入 utools API 到新 VM
-    try {
-      await invoke('inject_apis_to_vm', { vmId, pluginId });
-      console.log(`[PluginService] ✅ 创建新 VM 并注入 API: ${vmId} (插件: ${pluginId})`);
-    } catch (e) {
-      console.warn(`[PluginService] ⚠️ API 注入失败（可能不影响基本功能）:`, e);
-    }
-
-    // 加入缓存
-    const now = Date.now();
-    this.vmCache.set(pluginId, {
-      vmId,
-      pluginId,
-      createdAt: now,
-      lastUsedAt: now
-    });
-
-    return vmId;
-  }
-
-  /**
-   * 清除最久未使用的 VM（LRU 淘汰策略）
-   */
-  private evictOldestVm(): void {
-    let oldestKey: string | null = null;
-    let oldestTime = Infinity;
-
-    for (const [key, entry] of this.vmCache.entries()) {
-      if (entry.lastUsedAt < oldestTime) {
-        oldestTime = entry.lastUsedAt;
-        oldestKey = key;
-      }
-    }
-
-    if (oldestKey) {
-      const entry = this.vmCache.get(oldestKey)!;
-      console.log(`[PluginService] 🗑️ 淘汰最久未使用的 VM: ${entry.vmId} (插件: ${oldestKey})`);
-
-      // 尝试销毁后端 VM
-      invoke('quickjs_destroy_vm', { vmId: entry.vmId }).catch(e => {
-        console.warn(`[PluginService] ⚠️ 销毁 VM 失败:`, e);
-      });
-
-      // 从缓存中移除
-      this.vmCache.delete(oldestKey);
-    }
-  }
-
-  /**
-   * 清除指定插件的 VM 缓存
-   *
-   * @param pluginId - 插件 ID
-   */
-  private clearVmCache(pluginId: string): void {
-    const cached = this.vmCache.get(pluginId);
-    if (cached) {
-      // 尝试销毁后端 VM
-      invoke('quickjs_destroy_vm', { vmId: cached.vmId }).catch(e => {
-        console.warn(`[PluginService] ⚠️ 销毁 VM 失败:`, e);
-      });
-
-      this.vmCache.delete(pluginId);
-      console.log(`[PluginService] 🧹 已清除插件 ${pluginId} 的 VM 缓存`);
-    }
-  }
-
-  /**
-   * 清除所有 VM 缓存（应用退出时调用）
-   */
-  clearAllVmCache(): void {
-    console.log(`[PluginService] 🧹 清除所有 VM 缓存 (共 ${this.vmCache.size} 个)...`);
-
-    for (const [pluginId, entry] of this.vmCache.entries()) {
-      invoke('quickjs_destroy_vm', { vmId: entry.vmId }).catch(e => {
-        console.warn(`[PluginService] ⚠️ 销毁 VM 失败 (${pluginId}):`, e);
-      });
-    }
-
-    this.vmCache.clear();
-    console.log('[PluginService] ✅ 所有 VM 缓存已清除');
-  }
-
-  /**
-   * 获取当前缓存状态（用于调试）
-   *
-   * @returns 缓存的 VM 数量和详情
-   */
-  getCacheStatus(): { size: number; entries: Array<{ pluginId: string; vmId: string; lastUsed: number }> } {
+  async getCacheStatus(): Promise<{ size: number; entries: Array<{ pluginId: string; vmId: string; lastUsed: number }> }> {
+    // 前端不再缓存 VM，返回空状态
+    // TODO: 可调用后端 get_plugin_health 获取真实的后端状态
     return {
-      size: this.vmCache.size,
-      entries: Array.from(this.vmCache.entries()).map(([key, value]) => ({
-        pluginId: key,
-        vmId: value.vmId,
-        lastUsed: value.lastUsedAt
-      }))
+      size: 0,
+      entries: []
     };
   }
 }
