@@ -31,7 +31,7 @@ bun run tauri build
 
 ## 文档
 
-完整文档请查看 [Wiki 索引](./wiki/INDEX.md)
+完整文档请查看 [Wiki 索引](./INDEX.md)
 
 ## 技术栈
 
