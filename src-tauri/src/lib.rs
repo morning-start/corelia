@@ -12,6 +12,13 @@ use commands::config::{
     load_app_config, save_app_config, clear_app_config,
 };
 
+// 导入插件命令（重构后的版本）
+use commands::plugin::{
+    scan_plugins, get_plugin_list, load_plugin, unload_plugin,
+    find_plugins_by_prefix, cleanup_idle_plugins, get_plugin_health,
+    plugin_execute,
+};
+
 use tauri_plugin_autostart::MacosLauncher;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -20,7 +27,7 @@ use tauri::{
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
-use services::WindowService;
+use services::{WindowService, PluginService};
 
 // 导入 QuickJS 运行时管理器
 use plugins::quickjs_runtime::{
@@ -32,10 +39,7 @@ use plugins::quickjs_runtime::{
 use plugins::api_bridge::inject_apis_to_vm;
 
 // 导入插件加载器
-use plugins::loader::{
-    PluginLoader, scan_plugins, get_plugin_list, load_plugin, unload_plugin,
-    find_plugins_by_prefix, cleanup_idle_plugins, get_plugin_health, plugin_execute,
-};
+use plugins::loader::PluginLoader;
 
 // 导入插件注册表
 use plugins::registry::{
@@ -53,21 +57,25 @@ use plugins::wasm_bridge::{
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 创建共享的 QuickJSRuntime 实例
+    let shared_runtime = Arc::new(QuickJSRuntime::new());
+    // 创建共享的 PluginLoader 实例
+    let shared_loader = Arc::new(Mutex::new(PluginLoader::new(
+        PathBuf::from("plugins"),
+        shared_runtime.clone(),
+    )));
+    // 创建 PluginService 实例
+    let plugin_service = PluginService::new(shared_loader.clone(), shared_runtime.clone());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
-        .manage(QuickJSRuntime::new())  // 注册 QuickJS 运行时管理器（单例，供 Commands 直接使用）
-        .manage({
-            // 创建共享的 Arc<QuickJSRuntime> 实例
-            let shared_runtime = Arc::new(QuickJSRuntime::new());
-            Mutex::new(PluginLoader::new(
-                PathBuf::from("plugins"),
-                shared_runtime,  // Loader 与 State 共享同一 Runtime 实例
-            ))
-        })  // 注册插件加载器
+        .manage(shared_runtime)  // 注册 QuickJS 运行时管理器
+        .manage(shared_loader)   // 注册插件加载器
+        .manage(plugin_service)  // 注册插件服务（职责划分新增）
         .manage(RwLock::new(PluginRegistry::new()))  // 注册插件注册表
         .manage(Mutex::new(WasmBridge::new()))  // 注册 WASM 桥接
         .setup(|app| {
@@ -147,7 +155,7 @@ pub fn run() {
             wasm_call_function,
             wasm_store_call_result,
             wasm_get_call_result,
-            // 插件加载器管理
+            // 插件加载器管理（使用重构后的 Commands）
             scan_plugins,
             get_plugin_list,
             load_plugin,
@@ -195,7 +203,7 @@ pub fn run() {
             commands::shortcut::register_custom_shortcut,
             commands::shortcut::unregister_all_shortcuts,
             commands::shortcut::get_current_shortcut,
-            // 插件数据隔离存储
+            // 插件数据隔离存储（注意：这个和 plugin_service 无关，属于数据存储）
             commands::plugin::get_plugin_data_path,
             commands::plugin::read_plugin_data,
             commands::plugin::write_plugin_data,

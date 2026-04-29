@@ -1,85 +1,96 @@
-import { api } from '$lib/api';
-import { SEARCH_CONFIG, type UserConfig } from '$lib/config';
+/**
+ * 搜索历史 Store
+ *
+ * 职责：
+ * - 管理 UI 响应式状态
+ * - 暴露给组件使用的响应式数据
+ * - 委托业务逻辑给 historyService
+ *
+ * 注意：此 Store 仅负责 UI 状态管理
+ * 业务逻辑和持久化由 historyService 负责
+ */
 
-export interface HistoryItem {
-  query: string;
-  timestamp: number;
-  count: number;
-}
+import { historyService, type HistoryItem as ServiceHistoryItem } from '$lib/services/history';
+
+export type HistoryItem = ServiceHistoryItem;
 
 interface SearchHistoryState {
   items: HistoryItem[];
-  maxCapacity: number;
 }
-
-const DEFAULT_MAX_CAPACITY = 100;
 
 let state = $state<SearchHistoryState>({
   items: [],
-  maxCapacity: DEFAULT_MAX_CAPACITY,
 });
 
 export const searchHistory = {
+  /**
+   * 获取所有历史记录（响应式）
+   */
   get items() {
     return state.items;
   },
 
-  get maxCapacity() {
-    return state.maxCapacity;
+  /**
+   * 初始化 Store
+   * 从 service 加载数据并同步到响应式状态
+   */
+  async init(): Promise<void> {
+    await historyService.init();
+    this.syncFromService();
   },
 
-  async init() {
-    try {
-      const stored = await api.store.load('search_history');
-      if (stored && Array.isArray(stored)) {
-        state = { items: stored as HistoryItem[], maxCapacity: DEFAULT_MAX_CAPACITY };
-      }
-    } catch (e) {
-      console.error('Failed to load search history:', e);
-    }
+  /**
+   * 设置最大容量
+   *
+   * @param capacity - 最大历史记录条数
+   */
+  setMaxCapacity(capacity: number): void {
+    historyService.setMaxCapacity(capacity);
+    this.syncFromService();
   },
 
-  setMaxCapacity(capacity: number) {
-    state = { ...state, maxCapacity: capacity };
+  /**
+   * 添加搜索记录
+   *
+   * @param query - 搜索词
+   */
+  add(query: string): void {
+    historyService.add(query);
+    this.syncFromService();
   },
 
-  add(query: string) {
-    if (!query.trim()) return;
-
-    const existing = state.items.find(item => item.query === query);
-    let newItems: HistoryItem[];
-
-    if (existing) {
-      existing.count++;
-      existing.timestamp = Date.now();
-      newItems = [...state.items];
-    } else {
-      newItems = [
-        { query, timestamp: Date.now(), count: 1 },
-        ...state.items
-      ];
-    }
-
-    if (newItems.length > state.maxCapacity) {
-      newItems = newItems
-        .sort((a, b) => b.count - a.count || b.timestamp - a.timestamp)
-        .slice(0, state.maxCapacity);
-    }
-
-    api.store.save('search_history', newItems).catch(console.error);
-
-    state = { ...state, items: newItems };
+  /**
+   * 清空所有历史记录
+   */
+  async clear(): Promise<void> {
+    await historyService.clear();
+    this.syncFromService();
   },
 
-  async clear() {
-    state = { items: [], maxCapacity: DEFAULT_MAX_CAPACITY };
-    await api.store.delete('search_history');
+  /**
+   * 删除指定的历史记录
+   *
+   * @param query - 要删除的搜索词
+   */
+  remove(query: string): void {
+    historyService.remove(query);
+    this.syncFromService();
   },
 
+  /**
+   * 获取最近的搜索记录
+   *
+   * @param limit - 返回条数限制
+   * @returns 搜索词列表
+   */
   getRecent(limit: number = 10): string[] {
-    return state.items
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, limit)
-      .map(item => item.query);
+    return historyService.getRecent(limit);
+  },
+
+  /**
+   * 内部方法：从 service 同步数据到响应式状态
+   */
+  syncFromService(): void {
+    state = { items: historyService.getAll() };
   }
 };

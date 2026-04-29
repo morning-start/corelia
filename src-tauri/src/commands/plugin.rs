@@ -1,197 +1,82 @@
-// 插件数据隔离存储 Commands
-// 为每个插件提供独立的数据空间，支持读写、删除、清空等操作
-// 包含 10MB 配额限制，防止插件滥用存储空间
+//! 插件相关命令
+//!
+//! 职责：
+//! - 仅做参数验证和转发
+//! - 不包含业务逻辑
+//! - 业务逻辑委托给 PluginService
 
-use serde_json::Value;
-use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
-use tauri_plugin_store::StoreExt;
+use std::sync::{Arc, Mutex};
 
-/// 单个插件的最大数据存储限制：10MB
-const MAX_PLUGIN_DATA_SIZE: u64 = 10 * 1024 * 1024;
+use crate::plugins::loader::{PluginLoader, PluginManifest, PluginHealth, LoadResult};
+use crate::plugins::quickjs_runtime::QuickJSRuntime;
+use crate::services::PluginService;
 
-/// 内部辅助函数：检查并强制执行配额限制
-fn enforce_quota(app: &AppHandle, plugin_id: &str, additional_bytes: u64) -> Result<(), String> {
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-    let data_dir = app_dir.join("data").join(plugin_id);
-
-    let current_size = if data_dir.exists() {
-        // 简化版：只检查 storage.json 文件大小
-        let storage_file = data_dir.join("storage.json");
-        if storage_file.exists() {
-            std::fs::metadata(&storage_file)
-                .map(|m| m.len())
-                .unwrap_or(0)
-        } else {
-            0
-        }
-    } else {
-        0
-    };
-
-    if current_size + additional_bytes > MAX_PLUGIN_DATA_SIZE {
-        Err(format!(
-            "Plugin '{}' exceeds quota limit ({} bytes). Current: {}, Additional: {}, Max: {}",
-            plugin_id, current_size + additional_bytes, current_size, additional_bytes, MAX_PLUGIN_DATA_SIZE
-        ))
-    } else {
-        Ok(())
-    }
+/// 扫描并加载插件元数据
+#[tauri::command]
+pub fn scan_plugins(
+    plugin_service: tauri::State<'_, PluginService>,
+) -> Result<Vec<PluginManifest>, String> {
+    plugin_service.scan_plugins()
 }
 
-/// 获取插件的数据目录路径
-/// 自动创建目录（如不存在）
+/// 获取所有插件列表
 #[tauri::command]
-pub async fn get_plugin_data_path(app: AppHandle, plugin_id: String) -> Result<String, String> {
-    // 1. 获取应用数据目录 ($APPDATA/com.morningstart.corelia/)
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-
-    // 2. 构建插件数据目录: data/{plugin_id}/
-    let data_dir = app_dir.join("data").join(&plugin_id);
-
-    // 3. 自动创建目录（递归创建父目录）
-    std::fs::create_dir_all(&data_dir)
-        .map_err(|e| format!("Failed to create plugin data dir: {}", e))?;
-
-    // 4. 返回绝对路径字符串
-    Ok(data_dir.to_string_lossy().to_string())
+pub fn get_plugin_list(
+    plugin_service: tauri::State<'_, PluginService>,
+) -> Result<Vec<PluginManifest>, String> {
+    plugin_service.list_plugins()
 }
 
-/// 读取插件私有数据
-/// 从 data/{plugin_id}/storage.json 读取
+/// 加载指定插件
 #[tauri::command]
-pub async fn read_plugin_data(
-    app: AppHandle,
-    plugin_id: String,
-    key: String,
-) -> Result<Value, String> {
-    // 1. 构建存储文件名: data/{plugin_id}/storage.json
-    let store_file = format!("data/{}/storage.json", plugin_id);
-
-    // 2. 获取 Store 实例
-    let store = app.store(&store_file)
-        .map_err(|e| format!("Failed to open store: {}", e))?;
-
-    // 3. 按 key 读取数据
-    match store.get(&key) {
-        Some(value) => Ok(value),
-        None => Err(format!("Key '{}' not found in plugin '{}'", key, plugin_id)),
-    }
+pub fn load_plugin(
+    plugin_service: tauri::State<'_, PluginService>,
+    id: String,
+) -> Result<LoadResult, String> {
+    let (state, vm_id) = plugin_service.load_plugin(&id)?;
+    Ok(LoadResult { state, vm_id })
 }
 
-/// 写入插件私有数据
-/// 写入到 data/{plugin_id}/storage.json
+/// 卸载指定插件
 #[tauri::command]
-pub async fn write_plugin_data(
-    app: AppHandle,
-    plugin_id: String,
-    key: String,
-    value: Value,
+pub fn unload_plugin(
+    plugin_service: tauri::State<'_, PluginService>,
+    id: String,
 ) -> Result<(), String> {
-    // 配额检查（粗略估算：value 序列化后的大小）
-    let estimated_size = value.to_string().len() as u64;
-    enforce_quota(&app, &plugin_id, estimated_size)?;
-
-    // 1. 构建存储文件名
-    let store_file = format!("data/{}/storage.json", plugin_id);
-
-    // 2. 获取 Store 实例
-    let store = app.store(&store_file)
-        .map_err(|e| format!("Failed to open store: {}", e))?;
-
-    // 3. 写入数据
-    store.set(&key, value);
-
-    // 4. 保存到磁盘
-    store.save()
-        .map_err(|e| format!("Failed to save store: {}", e))?;
-
-    println!("[PluginStore] {} wrote key '{}'", plugin_id, key);
-    Ok(())
+    plugin_service.unload_plugin(&id)
 }
 
-/// 删除插件私有数据中的某个 key
+/// 按前缀搜索插件
 #[tauri::command]
-pub async fn delete_plugin_data(
-    app: AppHandle,
-    plugin_id: String,
-    key: String,
-) -> Result<(), String> {
-    let store_file = format!("data/{}/storage.json", plugin_id);
-    let store = app.store(&store_file)
-        .map_err(|e| format!("Failed to open store: {}", e))?;
-
-    store.delete(&key);
-    store.save()
-        .map_err(|e| format!("Failed to save store: {}", e))?;
-
-    Ok(())
+pub fn find_plugins_by_prefix(
+    plugin_service: tauri::State<'_, PluginService>,
+    prefix: String,
+) -> Result<Vec<PluginManifest>, String> {
+    plugin_service.find_plugins_by_prefix(&prefix)
 }
 
-/// 清除插件的所有数据（危险操作）
+/// 清理闲置插件
 #[tauri::command]
-pub async fn clear_plugin_data(
-    app: AppHandle,
-    plugin_id: String,
-) -> Result<(), String> {
-    // 1. 获取数据目录
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-    let data_dir = app_dir.join("data").join(&plugin_id);
-
-    // 2. 检查目录是否存在
-    if !data_dir.exists() {
-        return Err(format!("Plugin data directory does not exist: {}", plugin_id));
-    }
-
-    // 3. 删除整个目录及其内容
-    std::fs::remove_dir_all(&data_dir)
-        .map_err(|e| format!("Failed to clear plugin data: {}", e))?;
-
-    println!("[PluginStore] Cleared all data for plugin '{}'", plugin_id);
-    Ok(())
+pub fn cleanup_idle_plugins(
+    plugin_service: tauri::State<'_, PluginService>,
+) -> Result<usize, String> {
+    plugin_service.cleanup_idle_plugins()
 }
 
-/// 获取插件数据大小（字节）
+/// 获取插件健康状态
 #[tauri::command]
-pub async fn get_plugin_data_size(
-    app: AppHandle,
+pub fn get_plugin_health(
+    plugin_service: tauri::State<'_, PluginService>,
+) -> Result<Vec<PluginHealth>, String> {
+    plugin_service.get_plugin_health()
+}
+
+/// 执行插件代码
+#[tauri::command]
+pub fn plugin_execute(
+    plugin_service: tauri::State<'_, PluginService>,
     plugin_id: String,
-) -> Result<u64, String> {
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-    let data_dir = app_dir.join("data").join(&plugin_id);
-
-    if !data_dir.exists() {
-        return Ok(0); // 无数据
-    }
-
-    // 递归计算目录大小
-    fn dir_size(dir: &PathBuf) -> u64 {
-        match std::fs::read_dir(dir) {
-            Ok(reader) => {
-                reader
-                    .filter_map(Result::ok)
-                    .map(|entry| {
-                        let path = entry.path();
-                        if path.is_dir() {
-                            dir_size(&path)
-                        } else {
-                            std::fs::metadata(&path)
-                                .map(|m| m.len())
-                                .unwrap_or(0)
-                        }
-                    })
-                    .sum()
-            }
-            Err(e) => {
-                eprintln!("[PluginStore] 无法读取目录 {}: {}", dir.display(), e);
-                0
-            }
-        }
-    }
-
-    Ok(dir_size(&data_dir))
+    code: String,
+) -> Result<serde_json::Value, String> {
+    plugin_service.execute_plugin_code(&plugin_id, &code)
 }

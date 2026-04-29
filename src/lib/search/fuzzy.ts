@@ -1,6 +1,8 @@
 import { filter, type FilterResult } from 'fuzzy';
 import { pinyin } from 'pinyin-pro';
 
+export type { FilterResult };
+
 export interface SearchItem {
   id: string;
   name: string;

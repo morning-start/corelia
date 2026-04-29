@@ -42,10 +42,41 @@
 
 ---
 
+## 🎯 职责划分优化任务（新增）
+
+### 前端层职责划分
+
+| 任务 | 状态 | 优先级 | 说明 | 关联文件 |
+|------|:----:|:------:|------|----------|
+| 移除前端 VM 缓存 | ✅ | P0 | 前端不维护 VM 状态，纯代理后端管理 | [`service.ts`](src/lib/plugins/service.ts) |
+| 明确 Service 层与 Store 层职责 | ✅ | P0 | Service 负责业务逻辑，Store 负责状态管理 | [`stores/`](src/lib/stores/), [`services/`](src/lib/services/) |
+| 插件搜索并行化实现 | ✅ | P0 | 使用 Promise.allSettled 并行执行插件搜索 | [`search/plugin.ts`](src/lib/stores/search/plugin.ts) |
+| 历史记录管理独立模块 | ✅ | P1 | 从 executor 中剥离历史记录功能 | [`services/history.ts`](src/lib/services/history.ts) |
+| 窗口管理独立模块 | ✅ | P1 | 从 executor 中剥离窗口控制功能 | [`services/window.ts`](src/lib/services/window.ts) |
+
+### 后端层职责划分
+
+| 任务 | 状态 | 优先级 | 说明 | 关联文件 |
+|------|:----:|:------:|------|----------|
+| 插件状态机与 VM 管理解耦 | ✅ | P0 | PluginLoader 管理状态，QuickJSRuntime 管理 VM | [`loader/`](src-tauri/src/plugins/loader/), [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
+| API Bridge 职责单一化 | ✅ | P1 | 仅负责 API 注入，不包含业务逻辑 | [`api_bridge/`](src-tauri/src/plugins/api_bridge/) |
+| Commands 层仅做参数转发 | ✅ | P1 | 不包含业务逻辑，调用 Service 层处理 | [`commands/`](src-tauri/src/commands/) |
+| Services 层职责明确 | ✅ | P1 | 每个 Service 单一职责，独立可测试 | [`services/`](src-tauri/src/services/) |
+
+### 跨层职责边界
+
+| 任务 | 状态 | 优先级 | 说明 | 关联文件 |
+|------|:----:|:------:|------|----------|
+| 定义前后端职责边界文档 | ✅ | P0 | 明确哪些逻辑在前端，哪些在后端 | [`wiki/ARCHITECTURE.md`](wiki/ARCHITECTURE.md) |
+| 统一错误处理策略 | ✅ | P1 | 前端负责展示，后端负责记录和上报 | [`errors.ts`](src/lib/utils/errors.ts), [`error.rs`](src-tauri/src/error.rs) |
+| 配置管理职责明确 | ✅ | P1 | 后端负责持久化，前端负责展示和编辑 | [`config/`](src-tauri/src/commands/config/), [`stores/user.ts`](src/lib/stores/user.ts) |
+
+---
+
 ## 当前冲刺目标
 
 **窗口**：2026-04 ~ 2026-05  
-**目标**：完成插件系统的端到端闭环，确保 4 个示例插件稳定运行。
+**目标**：完成插件系统的端到端闭环，确保 8 个 MVP 插件稳定运行，职责划分清晰。
 
 ---
 
@@ -61,15 +92,19 @@
 | 插件热重载实现 | ✅ | P1 | 监听 `plugins/` 目录变化，自动重新加载 | [`hot_reload.rs`](src-tauri/src/plugins/hot_reload.rs) |
 | patch-loader 完善错误处理 | ⬜ | P1 | WASM patch 加载失败时的降级策略 | [`patch-loader.ts`](src/lib/plugins/patch-loader.ts) |
 
-### 2. 示例插件开发与验证 🧩
+### 2. MVP 插件开发与验证 🧩
 
 | 任务 | 状态 | 优先级 | 说明 | 关联路径 |
 |------|:----:|:------:|------|----------|
 | `hello-world` 插件验证 | ✅ | P0 | 最简插件，测试基础生命周期 | [`plugins/hello-world/`](plugins/hello-world/) |
 | `calc` 计算器插件完善 | 🔄 | P0 | 支持复杂表达式、错误提示、历史记录 | [`plugins/calc/`](plugins/calc/) |
 | `url-toolkit` URL 工具插件 | 🔄 | P1 | URL 解析、编码/解码、参数提取 | [`plugins/url-toolkit/`](plugins/url-toolkit/) |
-| `file-search` 文件搜索插件 | 🔄 | P1 | 本地文件快速索引与搜索 | [`plugins/file-search/`](plugins/file-search/) |
-| 剪贴板增强插件开发 | ⬜ | P1 | 剪贴板历史、搜索、快速粘贴 | 新建 `plugins/clipboard/` |
+| `file-search` 文件搜索插件（含应用搜索）| 🔄 | P0 | 本地文件快速索引与搜索 + 应用启动 | [`plugins/file-search/`](plugins/file-search/) |
+| 剪贴板增强插件开发 | ⬜ | P0 | 剪贴板历史、搜索、快速粘贴 | 新建 `plugins/clipboard/` |
+| 快捷命令插件开发 | ⬜ | P0 | 用户自定义命令脚本 | 新建 `plugins/quick-commands/` |
+| 二维码插件开发 | ⬜ | P1 | 生成/解析二维码（使用 crypto WASM） | 新建 `plugins/qrcode/` |
+| 截图增强插件开发 | ⬜ | P1 | 截图 + OCR + 标注（预留 AI WASM） | 新建 `plugins/screenshot/` |
+| 云端同步插件开发 | ⬜ | P2 | Webview 插件，配置跨设备同步 | 新建 `plugins/cloud-sync/` |
 
 ### 3. 搜索与 UI 体验 🔍
 
@@ -80,6 +115,7 @@
 | 快捷键设置面板 | ⬜ | P1 | 可视化修改全局唤起快捷键 | [`SettingPanel.svelte`](src/lib/components/SettingPanel.svelte) |
 | 主题切换实时生效 | 🔄 | P1 | 深色 / 浅色 / 跟随系统，无闪切 | [`theme.ts`](src/lib/stores/theme.ts), [`themes.css`](src/lib/styles/themes.css) |
 | 窗口失焦自动隐藏 | ✅ | P0 | 透明窗口失去焦点后自动隐藏 | [`window_service.rs`](src-tauri/src/services/window_service.rs) |
+| Onboarding 引导流程 | ⬜ | P1 | 4步引导 + 3个核心插件推荐 | 新建 `components/Onboarding.svelte` |
 
 ### 4. 配置与数据持久化 💾
 
@@ -98,6 +134,7 @@
 | 前端类型检查无错误 | ✅ | P0 | `bun run check` 通过 | 全局 |
 | Rust 编译无警告 | 🔄 | P0 | `cargo check`  clean | `src-tauri/` |
 | 插件加载流程 E2E 验证 | ⬜ | P1 | 手动验证：扫描 → 加载 → 执行 → 卸载 | 全局 |
+| CI/CD 流程搭建 | ⬜ | P2 | GitHub Actions + 测试覆盖率 | `.github/workflows/` |
 
 ---
 
@@ -152,13 +189,15 @@
 
 ## 下一步行动（本周）
 
-1. **修复** `calc` 插件浮点精度问题
-2. **实现** 插件 VM 闲置超时自动清理逻辑
-3. **完善** 插件加载失败时的错误提示（前端 Toast）
-4. **补充** `registry.rs` 核心函数的单元测试
+1. ✅ **移除** 前端 VM 缓存，统一由后端管理
+2. **修复** `calc` 插件浮点精度问题
+3. **实现** 插件 VM 闲置超时自动清理逻辑
+4. **完善** 插件加载失败时的错误提示（前端 Toast）
+5. **补充** `registry.rs` 核心函数的单元测试
+6. **开始** 剪贴板增强插件开发
 
 ---
 
-*文档版本: 1.1*  
+*文档版本: 1.5*  
 *最后更新: 2026-04-29*  
-*状态: 活跃*
+*状态: 活跃* | *职责划分优化任务全部完成！🎉*
