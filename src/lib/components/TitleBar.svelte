@@ -46,9 +46,8 @@
     border-bottom: 1px solid var(--border-subtle);
     user-select: none;
     -webkit-user-select: none;
-    /* 备选拖拽方案：使用 -webkit-app-region */
+    /* 拖拽方案：使用 -webkit-app-region */
     -webkit-app-region: drag;
-    app-region: drag;
   }
 
   .drag-area {
@@ -64,7 +63,6 @@
     flex-shrink: 0;
     /* 按钮区域不参与拖拽 */
     -webkit-app-region: no-drag;
-    app-region: no-drag;
   }
 
   .action-btn {
@@ -83,7 +81,6 @@
     flex-shrink: 0;
     /* 按钮不参与拖拽 */
     -webkit-app-region: no-drag;
-    app-region: no-drag;
   }
 
   .action-btn:hover {
@@ -98,9 +95,7 @@
   .action-btn svg {
     width: 14px;
     height: 14px;
-    /* SVG 不参与拖拽 */
-    -webkit-app-region: no-drag;
-    app-region: no-drag;
+    /* SVG 不响应鼠标事件 */
     pointer-events: none;
   }
 </style>

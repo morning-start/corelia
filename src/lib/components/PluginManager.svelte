@@ -40,11 +40,12 @@
   /** 是否正在测试 */
   let testing = $state(false);
   /** VM 缓存状态 */
-  let vmCacheStatus = pluginService.getCacheStatus();
+  let vmCacheStatus = $state({ size: 0, entries: [] as Array<{ pluginId: string; vmId: string; lastUsed: number }> });
 
   onMount(async () => {
     await loadPlugins();
     await loadEnabledPlugins();
+    vmCacheStatus = await pluginService.getCacheStatus();
   });
 
   /** 加载插件列表 */
@@ -55,7 +56,7 @@
       plugins = await pluginService.init();
       console.log('[PluginManager] 加载插件列表:', plugins);
       // 更新 VM 缓存状态
-      vmCacheStatus = pluginService.getCacheStatus();
+      vmCacheStatus = await pluginService.getCacheStatus();
     } catch (e) {
       error = `加载插件失败: ${e}`;
       console.error('[PluginManager]', error);
@@ -98,7 +99,7 @@
       }
       enabledPlugins = new Set(enabledPlugins);
       saveEnabledPlugins();
-      vmCacheStatus = pluginService.getCacheStatus();
+      vmCacheStatus = await pluginService.getCacheStatus();
     } catch (e) {
       console.error(`[PluginManager] 切换插件状态失败 (${plugin.name}):`, e);
       error = `操作失败: ${e}`;
@@ -113,7 +114,7 @@
     try {
       await pluginService.unload(plugin.name);
       await pluginService.load(plugin.name);
-      vmCacheStatus = pluginService.getCacheStatus();
+      vmCacheStatus = await pluginService.getCacheStatus();
       console.log(`[PluginManager] 插件 ${plugin.name} 已重新加载`);
     } catch (e) {
       console.error(`[PluginManager] 重新加载插件失败 (${plugin.name}):`, e);
@@ -240,7 +241,10 @@
             class="plugin-item"
             class:disabled={!enabledPlugins.has(plugin.name)}
             class:selected={isSelected}
+            role="button"
+            tabindex="0"
             onclick={() => selectPlugin(plugin)}
+            onkeydown={(e) => e.key === 'Enter' && selectPlugin(plugin)}
           >
             <div class="plugin-info">
               <div class="plugin-logo">
@@ -328,29 +332,29 @@
             <button
               class="tab-btn"
               class:active={detailTab === 'vm'}
-              onclick={() => { detailTab = 'vm'; vmCacheStatus = pluginService.getCacheStatus(); }}
+              onclick={async () => { detailTab = 'vm'; vmCacheStatus = await pluginService.getCacheStatus(); }}
             >VM</button>
           </div>
 
           <div class="detail-content">
             {#if detailTab === 'details'}
               <div class="info-grid">
-                <div class="info-item"><label>名称</label><span>{selectedPlugin.name}</span></div>
-                <div class="info-item"><label>版本</label><span>{selectedPlugin.version}</span></div>
-                <div class="info-item"><label>类型</label><span>{selectedPlugin.type ?? 'quickjs'}</span></div>
-                <div class="info-item"><label>触发前缀</label><span><code>{formatPrefix(selectedPlugin.prefix)}</code></span></div>
-                <div class="info-item"><label>入口文件</label><span><code>{selectedPlugin.main ?? 'index.js'}</code></span></div>
-                <div class="info-item"><label>作者</label><span>{selectedPlugin.author ?? '-'}</span></div>
+                <div class="info-item"><span class="info-label">名称</span><span>{selectedPlugin.name}</span></div>
+                <div class="info-item"><span class="info-label">版本</span><span>{selectedPlugin.version}</span></div>
+                <div class="info-item"><span class="info-label">类型</span><span>{selectedPlugin.type ?? 'quickjs'}</span></div>
+                <div class="info-item"><span class="info-label">触发前缀</span><span><code>{formatPrefix(selectedPlugin.prefix)}</code></span></div>
+                <div class="info-item"><span class="info-label">入口文件</span><span><code>{selectedPlugin.main ?? 'index.js'}</code></span></div>
+                <div class="info-item"><span class="info-label">作者</span><span>{selectedPlugin.author ?? '-'}</span></div>
               </div>
               {#if selectedPlugin.description}
                 <div class="section">
-                  <label>描述</label>
+                  <span class="section-label">描述</span>
                   <p>{selectedPlugin.description}</p>
                 </div>
               {/if}
               {#if selectedPlugin.features && selectedPlugin.features.length > 0}
                 <div class="section">
-                  <label>功能列表 ({selectedPlugin.features.length})</label>
+                  <span class="section-label">功能列表 ({selectedPlugin.features.length})</span>
                   {#each selectedPlugin.features as feature}
                     <div class="feature-card">
                       <span class="feature-code">{feature.code}</span>
@@ -377,10 +381,10 @@
 
                 {#if testResults.length > 0}
                   <div class="test-results">
-                    <label>搜索结果 ({testResults.length})</label>
+                    <span class="result-label">搜索结果 ({testResults.length})</span>
                     {#each testResults as r}
                       {@const item = r as Record<string, unknown>}
-                      <div class="result-item" onclick={() => runTestAction(String(item.action ?? ''))}>
+                      <div class="result-item" role="button" tabindex="0" onclick={() => runTestAction(String(item.action ?? ''))} onkeydown={(e) => e.key === 'Enter' && runTestAction(String(item.action ?? ''))}>
                         <span class="result-icon">{item.icon ?? '&#128269;'}</span>
                         <div class="result-text">
                           <span class="result-title">{item.title}</span>
@@ -393,7 +397,7 @@
 
                 {#if testActionResult}
                   <div class="test-action-result">
-                    <label>执行结果</label>
+                    <span class="result-label">执行结果</span>
                     <pre>{testActionResult}</pre>
                   </div>
                 {/if}
@@ -433,7 +437,7 @@
                   <p class="vm-empty">当前无缓存的 VM 实例</p>
                 {:else}
                   <div class="vm-list">
-                    <label>已缓存 VM ({vmCacheStatus.entries.length}/10)</label>
+                    <span class="vm-list-label">已缓存 VM ({vmCacheStatus.entries.length}/10)</span>
                     {#each vmCacheStatus.entries as entry}
                       <div class="vm-item">
                         <span class="vm-plugin">{entry.pluginId}</span>
@@ -620,7 +624,7 @@
     color: var(--text-secondary);
   }
 
-  .plugin-prefix code {
+  .plugin-prefix :global(code) {
     background: var(--bg-secondary);
     padding: 1px 5px;
     border-radius: 3px;
@@ -630,7 +634,7 @@
   }
 
   .plugin-author { font-size: 11px; }
-  .plugin-description { margin-top: 4px; font-size: 11px; color: var(--text-secondary); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .plugin-description { margin-top: 4px; font-size: 11px; color: var(--text-secondary); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 
   .plugin-actions {
     display: flex;
@@ -715,12 +719,12 @@
 
   /* 详情 Tab */
   .info-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
-  .info-item label { font-size: 11px; color: var(--text-secondary); }
+  .info-item .info-label { font-size: 11px; color: var(--text-secondary); }
   .info-item span { font-size: 12px; }
   .info-item code { background: var(--bg-secondary); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
 
   .section { margin-top: 14px; }
-  .section label { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .section .section-label { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
   .section p { font-size: 12px; line-height: 1.5; margin: 0; color: var(--text-muted); }
 
   .feature-card {
@@ -750,7 +754,7 @@
     cursor: pointer; font-weight: 500;
   }
 
-  .test-results label, .test-action-result label {
+  .test-results .result-label, .test-action-result .result-label {
     display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;
   }
 
@@ -789,7 +793,7 @@
   /* VM Tab */
   .vm-area { display: flex; flex-direction: column; gap: 8px; }
   .vm-empty { font-size: 12px; color: var(--text-secondary); }
-  .vm-list label { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+  .vm-list .vm-list-label { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
 
   .vm-item {
     display: flex; gap: 8px; align-items: center; padding: 6px 10px;
