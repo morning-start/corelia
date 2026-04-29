@@ -8,18 +8,15 @@ export interface SearchItem {
   category: string;
 }
 
-/** 判断字符串是否包含中文字符 */
 function containsChinese(str: string): boolean {
   return /[\u4e00-\u9fa5]/.test(str);
 }
 
-/** 拼音索引缓存 */
 const pinyinCache = new Map<string, string>();
 
-/** 获取字符串的拼音（带缓存） */
 function getPinyin(str: string): string {
   if (!containsChinese(str)) {
-    return str; // 无中文，直接返回原字符串
+    return str;
   }
   const cached = pinyinCache.get(str);
   if (cached) return cached;
@@ -28,18 +25,97 @@ function getPinyin(str: string): string {
   return result;
 }
 
-export function search(query: string, items: SearchItem[]): FilterResult<SearchItem>[] {
-  // 如果查询词不含中文，跳过拼音转换
-  const queryHasChinese = containsChinese(query);
-  const queryPinyin = queryHasChinese ? getPinyin(query) : query;
+export interface SearchIndex {
+  item: SearchItem;
+  searchText: string;
+}
 
-  return filter(query, items, {
-    extract: (item) => {
+export class IncrementalSearchIndex {
+  private index: Map<string, SearchIndex> = new Map();
+  private items: SearchItem[] = [];
+
+  buildIndex(items: SearchItem[]): void {
+    this.items = items;
+    this.index.clear();
+
+    for (const item of items) {
       const namePinyin = getPinyin(item.name);
       const descPinyin = getPinyin(item.description);
-      return `${item.name} ${namePinyin} ${item.description} ${descPinyin}`;
-    },
-  });
+      const searchText = `${item.name} ${namePinyin} ${item.description} ${descPinyin}`.toLowerCase();
+      
+      this.index.set(item.id, {
+        item,
+        searchText
+      });
+    }
+
+    console.log(`[SearchIndex] 已构建索引，共 ${this.index.size} 项`);
+  }
+
+  addItem(item: SearchItem): void {
+    const namePinyin = getPinyin(item.name);
+    const descPinyin = getPinyin(item.description);
+    const searchText = `${item.name} ${namePinyin} ${item.description} ${descPinyin}`.toLowerCase();
+    
+    this.index.set(item.id, { item, searchText });
+    this.items.push(item);
+  }
+
+  removeItem(id: string): void {
+    this.index.delete(id);
+    this.items = this.items.filter(item => item.id !== id);
+  }
+
+  search(query: string): FilterResult<SearchItem>[] {
+    const queryLower = query.toLowerCase();
+    const queryHasChinese = containsChinese(query);
+    const queryPinyin = queryHasChinese ? getPinyin(query) : query;
+    const queryText = `${queryLower} ${queryPinyin.toLowerCase()}`;
+
+    const matchedItems: SearchItem[] = [];
+    
+    for (const [_, indexEntry] of this.index) {
+      if (indexEntry.searchText.includes(queryText)) {
+        matchedItems.push(indexEntry.item);
+      }
+    }
+
+    return filter(query, matchedItems, {
+      extract: (item) => {
+        const entry = this.index.get(item.id);
+        return entry ? entry.searchText : `${item.name} ${item.description}`;
+      },
+    });
+  }
+
+  getIndexSize(): number {
+    return this.index.size;
+  }
+
+  clear(): void {
+    this.index.clear();
+    this.items = [];
+    pinyinCache.clear();
+  }
+}
+
+let globalIndex: IncrementalSearchIndex | null = null;
+
+export function getSearchIndex(): IncrementalSearchIndex {
+  if (!globalIndex) {
+    globalIndex = new IncrementalSearchIndex();
+  }
+  return globalIndex;
+}
+
+export function search(query: string, items: SearchItem[]): FilterResult<SearchItem>[] {
+  const index = getSearchIndex();
+  
+  if (index.getIndexSize() !== items.length) {
+    index.buildIndex(items);
+  }
+
+  return index.search(query);
 }
 
 export function generateTestData(count: number): SearchItem[] {

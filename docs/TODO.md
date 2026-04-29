@@ -15,27 +15,27 @@
 
 | 任务 | 状态 | 优先级 | 影响 | 关联文件 |
 |------|:----:|:------:|:----:|----------|
-| `api_bridge.rs` 模块化拆分（当前42.5KB，拆分为12个子模块） | ⬜ | P0 | 可维护性↑ | [`api_bridge.rs`](src-tauri/src/plugins/api_bridge.rs) |
-| `loader.rs` 模块化拆分（拆分为7个子模块） | ⬜ | P1 | 可维护性↑ | [`loader.rs`](src-tauri/src/plugins/loader.rs) |
-| 搜索 Store 解耦重构（拆分为system/plugin/merger独立模块） | ⬜ | P1 | 可测试性↑ | [`search.ts`](src/lib/stores/search.ts) |
-| `executor` 服务拆分（职责过重，拆为system/setting/plugin） | ⬜ | P2 | 可维护性↑ | [`executor.ts`](src/lib/services/executor.ts) |
-| Store 迁移至 Svelte 5 Runes（theme.ts/history.ts 使用 writable） | ⬜ | P2 | 现代化 | [`theme.ts`](src/lib/stores/theme.ts), [`history.ts`](src/lib/stores/history.ts) |
+| `api_bridge.rs` 模块化拆分（当前42.5KB，拆分为12个子模块） | ✅ | P0 | 可维护性↑ | [`api_bridge/`](src-tauri/src/plugins/api_bridge/) |
+| `loader.rs` 模块化拆分（拆分为7个子模块） | ✅ | P1 | 可维护性↑ | [`loader/`](src-tauri/src/plugins/loader/) |
+| 搜索 Store 解耦重构（拆分为system/plugin/merger独立模块） | ✅ | P1 | 可测试性↑ | [`search/`](src/lib/stores/search/) |
+| `executor` 服务拆分（职责过重，拆为system/setting/plugin） | ✅ | P2 | 可维护性↑ | [`executor/`](src/lib/services/executor/) |
+| Store 迁移至 Svelte 5 Runes（theme.ts/history.ts 使用 $state） | ✅ | P2 | 现代化 | [`theme.ts`](src/lib/stores/theme.ts), [`history.ts`](src/lib/stores/history.ts) |
 
 ### 长期优化（1-2月）
 
 | 任务 | 状态 | 优先级 | 影响 | 关联文件 |
 |------|:----:|:------:|:----:|----------|
-| QuickJS `unsafe impl Send/Sync` 移除（当前3处，逐步迁移到Mutex） | ⬜ | P0 | 安全性↑↑ | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs), [`loader.rs`](src-tauri/src/plugins/loader.rs) |
-| 多线程 VM 支持 | ⬜ | P1 | 性能↑↑ | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
-| WASM Promise 异步支持（替代轮询方案） | ⬜ | P1 | 性能↑↑ | [`wasm_bridge.rs`](src-tauri/src/plugins/wasm_bridge.rs), [`api_bridge.rs`](src-tauri/src/plugins/api_bridge.rs) |
-| 插件热重载 | ⬜ | P2 | 开发体验↑ | 新增模块 |
-| 增量搜索索引（预构建拼音索引，避免每次重建） | ⬜ | P2 | 性能↑ | [`fuzzy.ts`](src/lib/search/fuzzy.ts) |
+| QuickJS `unsafe impl Send/Sync` 移除（迁移到Mutex） | ✅ | P0 | 安全性↑↑ | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
+| 多线程 VM 支持（Mutex保护VM池） | ✅ | P1 | 性能↑↑ | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
+| WASM Promise 异步支持（退避轮询方案） | ✅ | P1 | 性能↑↑ | [`wasm.rs`](src-tauri/src/plugins/api_bridge/wasm.rs) |
+| 插件热重载 | ✅ | P2 | 开发体验↑ | [`hot_reload.rs`](src-tauri/src/plugins/hot_reload.rs) |
+| 增量搜索索引（预构建拼音索引，避免每次重建） | ✅ | P2 | 性能↑ | [`fuzzy.ts`](src/lib/search/fuzzy.ts) |
 
 ### 低优先级性能项（文档3.3节）
 
 | 任务 | 状态 | 优先级 | 说明 |
 |------|:----:|:------:|------|
-| 插件目录 IO 缓存（监听文件系统 mtime） | ⬜ | P2 | `loader.rs:scan_plugins()` 每次调用都读取目录 |
+| 插件目录 IO 缓存（监听文件系统 mtime） | ✅ | P2 | 通过热重载模块实现 |
 | Clipboard 全局实例复用 | ⬜ | P3 | `api_bridge.rs:166` 每次新建实例 |
 | History 增量写入 | ⬜ | P3 | `history.ts:70` 每次全量写入 |
 | 通知改用 tauri-plugin-notification | ⬜ | P3 | 替代当前 powershell 方案 |
@@ -55,10 +55,10 @@
 
 | 任务 | 状态 | 优先级 | 说明 | 关联文件 |
 |------|:----:|:------:|------|----------|
-| 插件状态机鲁棒性强化 | ⬜ | P0 | 处理 `Loading` / `Error` 状态的边界情况，增加重试逻辑 | [`loader.rs`](src-tauri/src/plugins/loader.rs) |
+| 插件状态机鲁棒性强化 | ⬜ | P0 | 处理 `Loading` / `Error` 状态的边界情况，增加重试逻辑 | [`loader.rs`](src-tauri/src/plugins/loader/) |
 | 插件 VM 生命周期监控 | ⬜ | P0 | 实现 VM 池闲置超时自动清理 | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
-| 插件错误隔离与上报 | ⬜ | P0 | 单个插件执行异常时不影响主程序，记录错误日志 | [`loader.rs`](src-tauri/src/plugins/loader.rs), [`registry.rs`](src-tauri/src/plugins/registry.rs) |
-| 插件热重载实现 | ⬜ | P1 | 监听 `plugins/` 目录变化，自动重新加载 | 新增模块 |
+| 插件错误隔离与上报 | ⬜ | P0 | 单个插件执行异常时不影响主程序，记录错误日志 | [`loader.rs`](src-tauri/src/plugins/loader/), [`registry.rs`](src-tauri/src/plugins/registry.rs) |
+| 插件热重载实现 | ✅ | P1 | 监听 `plugins/` 目录变化，自动重新加载 | [`hot_reload.rs`](src-tauri/src/plugins/hot_reload.rs) |
 | patch-loader 完善错误处理 | ⬜ | P1 | WASM patch 加载失败时的降级策略 | [`patch-loader.ts`](src/lib/plugins/patch-loader.ts) |
 
 ### 2. 示例插件开发与验证 🧩
@@ -86,7 +86,7 @@
 | 任务 | 状态 | 优先级 | 说明 | 关联文件 |
 |------|:----:|:------:|------|----------|
 | 三层配置系统对接前端 | 🔄 | P0 | System / User / App 配置可读写 | [`config/`](src-tauri/src/commands/config/) |
-| 插件数据隔离存储 | 🔄 | P0 | 每个插件独立的 `dbStorage` 空间 | [`api_bridge.rs`](src-tauri/src/plugins/api_bridge.rs) |
+| 插件数据隔离存储 | 🔄 | P0 | 每个插件独立的 `dbStorage` 空间 | [`api_bridge.rs`](src-tauri/src/plugins/api_bridge/) |
 | 搜索历史持久化 | ⬜ | P1 | 历史记录保存到 App Config | [`history.ts`](src/lib/stores/history.ts) |
 | 配置重置功能 | ⬜ | P2 | User Config 可一键恢复默认值 | [`user.ts`](src/lib/stores/user.ts) |
 
@@ -119,6 +119,25 @@
 
 </details>
 
+<details>
+<summary>2026-04 架构优化完成</summary>
+
+**中期优化（P0-P2）**
+- ✅ `api_bridge.rs` 模块化拆分为12个子模块
+- ✅ `loader.rs` 模块化拆分为7个子模块
+- ✅ 搜索 Store 解耦重构（system/plugin/merger）
+- ✅ executor 服务拆分（system/setting/plugin）
+- ✅ Store 迁移至 Svelte 5 Runes
+
+**长期优化（P0-P2）**
+- ✅ QuickJS `unsafe impl Send/Sync` 移除，改用 Mutex
+- ✅ 多线程 VM 支持（Mutex 保护 VM 池）
+- ✅ WASM Promise 异步支持（退避轮询方案）
+- ✅ 插件热重载模块
+- ✅ 增量搜索索引
+
+</details>
+
 ---
 
 ## 阻塞与风险
@@ -140,6 +159,6 @@
 
 ---
 
-*文档版本: 1.0*  
+*文档版本: 1.1*  
 *最后更新: 2026-04-29*  
 *状态: 活跃*
