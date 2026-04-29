@@ -1,13 +1,37 @@
 # 插件系统
 
-> Corelia 插件系统采用 QuickJS 沙箱 + WASM Patch 架构，支持 JavaScript 插件的热加载与高性能 Rust 扩展。
+> Corelia 插件系统采用 QuickJS 沙箱 + WASM Patch 架构，支持 JavaScript 插件的热加载与高性能 Rust 扩展
 
 ## 概述
 
 Corelia 插件系统分为两层：
 
-- **QuickJS 插件**：标准 JavaScript 插件，运行在沙箱化的 QuickJS VM 中
-- **WASM Patch**：Rust 编译的 WebAssembly 模块，在 WebView 中执行，供 QuickJS 插件调用
+- **QuickJS 插件**：标准 JavaScript 插件，运行在沙箱化的 QuickJS VM 中（后端）
+- **WASM Patch**：Rust 编译的 WebAssembly 模块，在 WebView 中执行，供 QuickJS 插件调用（前端）
+
+---
+
+## 插件系统架构分层
+
+### 前端职责
+
+| 组件 | 文件位置 | 职责 |
+|------|----------|------|
+| PatchLoader | `src/lib/plugins/patch-loader.ts` | WASM Patch 加载、函数注册、WASM 执行、结果存储 |
+| PluginService | `src/lib/plugins/service.ts` | 插件生命周期管理、插件搜索、插件状态同步 |
+| PluginStore | `src/lib/plugins/store.ts` | 插件相关状态管理 |
+
+### 后端职责
+
+| 组件 | 文件位置 | 职责 |
+|------|----------|------|
+| QuickJSRuntime | `src-tauri/src/plugins/quickjs_runtime.rs` | VM 池化管理、VM 创建/销毁、代码执行 |
+| PluginLoader | `src-tauri/src/plugins/loader/` | 插件扫描、加载、卸载、生命周期管理 |
+| PluginRegistry | `src-tauri/src/plugins/registry.rs` | 插件注册表、插件索引、状态管理 |
+| ApiBridge | `src-tauri/src/plugins/api_bridge/` | utools API 注入、系统能力桥接 |
+| WasmBridge | `src-tauri/src/plugins/wasm_bridge.rs` | WASM 调用桥接、结果缓存、事件触发 |
+
+---
 
 ## 插件目录结构
 
@@ -26,6 +50,8 @@ plugins/
                 ├── crypto.d.ts     # 类型声明
                 └── package.json    # 导出函数信息
 ```
+
+---
 
 ## plugin.json 规范
 
@@ -67,6 +93,8 @@ plugins/
 | `features` | FeatureConfig[] | ❌ | 功能配置列表 |
 | `logo` | string | ❌ | 图标路径 |
 
+---
+
 ## 插件生命周期
 
 ```
@@ -96,14 +124,89 @@ plugins/
 
 ### 状态说明
 
-| 状态 | 说明 |
-|------|------|
-| MetaLoaded | 已解析 plugin.json，未加载代码 |
-| Loading | 正在创建 VM、注入 API、执行代码 |
-| Ready | 插件就绪，可执行命令 |
-| Cached | 闲置超时后缓存，可重新激活 |
-| Error | 加载/执行出错 |
-| Unloaded | 已卸载，VM 已销毁 |
+| 状态 | 说明 | 触发者 |
+|------|------|--------|
+| MetaLoaded | 已解析 plugin.json，未加载代码 | PluginLoader.scan_plugins() |
+| Loading | 正在创建 VM、注入 API、执行代码 | PluginLoader.load_plugin() |
+| Ready | 插件就绪，可执行命令 | 插件代码执行完成 |
+| Cached | 闲置超时后缓存，可重新激活 | QuickJSRuntime |
+| Error | 加载/执行出错 | VM 执行异常 |
+| Unloading | 正在卸载 | PluginLoader.unload_plugin() |
+| Unloaded | 已卸载，VM 已销毁 | 卸载完成 |
+
+### 前后端协作流程
+
+#### 1. 扫描插件（应用初始化）
+
+```
+前端 PluginService.init()
+    │
+    └─ invoke('scan_plugins')
+         │
+         └─ 后端 PluginLoader.scan_plugins()
+              ├─ 扫描 plugins/ 目录
+              ├─ 解析所有 plugin.json
+              ├─ 注册到 PluginRegistry
+              └─ 返回插件元数据列表
+                   │
+                   └─ 前端更新 PluginStore
+```
+
+**后端职责**：文件系统访问、JSON 解析、插件注册
+
+**前端职责**：初始化触发、状态更新
+
+#### 2. 加载插件（用户触发）
+
+```
+前端 invoke('load_plugin', { id: 'my-plugin' })
+    │
+    └─ 后端 PluginLoader.load_plugin()
+         ├─ 创建 VM: QuickJSRuntime.create_vm()
+         ├─ 注入 API: ApiBridge.inject_apis_to_vm()
+         ├─ 加载 patches: WasmBridge 通知前端
+         │    │
+         │    └─ emit('wasm-load-patch')
+         │         │
+         │         └─ 前端 PatchLoader 加载 WASM
+         │              ├─ 导入 WASM 模块
+         │              ├─ 注册 WASM 函数
+         │              └─ invoke('wasm_register_functions')
+         │
+         ├─ 执行插件代码: QuickJSRuntime.execute()
+         └─ 更新状态到 Ready
+```
+
+**后端职责**：VM 管理、API 注入、代码执行、事件触发
+
+**前端职责**：WASM 加载、函数注册、结果存储
+
+#### 3. WASM 调用（插件代码中）
+
+```
+插件代码: utools.wasm.__wasm_call('crypto.sha256', '"hello"')
+    │
+    └─ 后端 WasmBridge 处理
+         ├─ 生成 requestId
+         ├─ emit('wasm-call')
+         └─ 返回 requestId
+              │
+              └─ 前端 PatchLoader.handleWasmCall()
+                   ├─ 执行 WASM 函数
+                   └─ invoke('wasm_store_call_result')
+                        │
+                        └─ 后端 WasmBridge 缓存结果
+
+插件代码: utools.wasm.__wasm_get_result(requestId)
+    │
+    └─ 后端 WasmBridge 返回缓存结果（并移除）
+```
+
+**后端职责**：调用桥接、结果缓存、ID 生成
+
+**前端职责**：WASM 执行、结果返回
+
+---
 
 ## 插件 API (utools)
 
@@ -119,6 +222,8 @@ utools.dbStorage.removeItem('key');
 const all = utools.dbStorage.getAll();        // Record<string, string>
 ```
 
+**实现位置**：`src-tauri/src/plugins/api_bridge/db_storage.rs`
+
 ### 剪贴板 API
 
 ```javascript
@@ -126,6 +231,8 @@ utools.clipboard.readText();            // 读取剪贴板文本
 utools.clipboard.writeText('text');     // 写入剪贴板
 utools.clipboard.copyText('text');      // 复制文本
 ```
+
+**实现位置**：`src-tauri/src/plugins/api_bridge/clipboard.rs`
 
 ### Shell API
 
@@ -136,6 +243,8 @@ utools.shell.showItemInFolder('/path');    // 在文件管理器中显示
 utools.shell.beep();                       // 系统提示音
 ```
 
+**实现位置**：`src-tauri/src/plugins/api_bridge/shell.rs`
+
 ### 窗口 API
 
 ```javascript
@@ -144,6 +253,8 @@ utools.showMainWindow();
 utools.setExpendHeight(400);  // 设置窗口高度
 utools.outPlugin();           // 退出插件
 ```
+
+**实现位置**：`src-tauri/src/plugins/api_bridge/window.rs`
 
 ### 路径 API
 
@@ -154,6 +265,8 @@ utools.getPath('downloads');  // 下载目录
 utools.getPath('appdata');    // AppData 目录
 utools.getPath('temp');       // 临时目录
 ```
+
+**实现位置**：`src-tauri/src/plugins/api_bridge/path.rs`
 
 支持的路径名：`home`/`~`, `desktop`, `document`/`documents`, `download`/`downloads`, `music`, `picture`/`pictures`, `video`/`videos`, `temp`/`tmp`, `appdata`, `localappdata`/`appcache`, `userdata`, `config`, `log`/`logs`, `resource`/`resources`, `exe`/`exepath`, `plugin`/`pluginpath`, `root`, `cwd`/`currentdir`。
 
@@ -166,6 +279,8 @@ utools.fs.exists('/path');                         // 检查路径是否存在
 utools.fs.isDir('/path');                          // 检查是否为目录
 ```
 
+**实现位置**：`src-tauri/src/plugins/api_bridge/fs.rs`
+
 ### HTTP 请求 API
 
 ```javascript
@@ -177,7 +292,9 @@ const text = response.text();     // 响应文本
 const json = response.json();     // 解析 JSON
 ```
 
-> 注意：`fetch` 在 QuickJS 中通过 `ureq` 同步执行（独立线程），而非浏览器异步 API。
+**实现位置**：`src-tauri/src/plugins/api_bridge/fetch.rs`
+
+注意：`fetch` 在 QuickJS 中通过 `ureq` 同步执行（独立线程），而非浏览器异步 API。
 
 ### 对话框 API
 
@@ -186,6 +303,8 @@ utools.dialog.showOpenDialog({});    // 打开文件对话框
 utools.dialog.showSaveDialog({});    // 保存文件对话框
 utools.dialog.showMessageBox({});    // 消息对话框
 ```
+
+**实现位置**：`src-tauri/src/plugins/api_bridge/dialog.rs`
 
 ### 子进程 API
 
@@ -200,11 +319,15 @@ utools.process.getAppName();     // "Corelia"
 utools.process.getAppVersion();  // 应用版本
 ```
 
+**实现位置**：`src-tauri/src/plugins/api_bridge/process.rs`
+
 ### 通知 API
 
 ```javascript
 utools.showNotification('标题', '内容');
 ```
+
+**实现位置**：`src-tauri/src/plugins/api_bridge/notification.rs`
 
 ### 上下文 API
 
@@ -213,6 +336,8 @@ const ctx = utools.getContext();
 // { code: "", type: "none", payload: null, refresh: false }
 utools.setContext(payload);
 ```
+
+**实现位置**：`src-tauri/src/plugins/api_bridge/context.rs`
 
 ### 生命周期回调
 
@@ -228,18 +353,20 @@ utools.onPluginOut(() => {
 utools.registerPluginFeature(feature);
 ```
 
+---
+
 ## WASM Patch 系统
 
 ### 架构
 
 ```
-QuickJS VM ──__wasm_call──→ Rust WasmBridge ──emit event──→ WebView
-                                                                  │
-                                                            WebAssembly
-                                                                  │
-Rust WasmBridge ←──invoke store──→ WebView PatchLoader ←─────────┘
-       │
-QuickJS VM ←──__wasm_get_result──┘
+QuickJS VM ─__wasm_call→ Rust WasmBridge ─emit event→ WebView
+                                                           │
+                                                      WebAssembly
+                                                           │
+Rust WasmBridge ←invoke store← WebView PatchLoader ←──────┘
+     │
+QuickJS VM ←__wasm_get_result┘
 ```
 
 ### 使用方式（QuickJS 插件中）
@@ -261,6 +388,10 @@ if (parsed.success) {
 } else {
   console.error('错误:', parsed.error);
 }
+
+// 4. 检查函数是否可用
+const available = utools.wasm.__wasm_has('crypto.sha256');
+const allFunctions = utools.wasm.__wasm_available();
 ```
 
 ### WASM API 参考
@@ -274,14 +405,15 @@ if (parsed.success) {
 
 ### WASM Patch 开发流程
 
-1. **创建 Patch 项目**
+#### 1. 创建 Patch 项目
 
 ```bash
-cargo new --lib patches/crypto
-cd patches/crypto
+cd patches
+cargo new --lib crypto
+cd crypto
 ```
 
-2. **编写 Rust 代码** (`src/lib.rs`)
+#### 2. 编写 Rust 代码 (`src/lib.rs`)
 
 ```rust
 use wasm_bindgen::prelude::*;
@@ -289,17 +421,37 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub fn sha256(input: &str) -> String {
     // 实现 SHA256
-    "hashed_result".to_string()
+    use sha2::{Sha256, Digest};
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    let result = hasher.finalize();
+    format!("{:x}", result)
 }
 ```
 
-3. **构建**
+#### 3. 配置 Cargo.toml
+
+```toml
+[package]
+name = "crypto"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+sha2 = "0.10"
+```
+
+#### 4. 构建
 
 ```bash
 wasm-pack build --target web
 ```
 
-4. **在 plugin.json 中声明依赖**
+#### 5. 在 plugin.json 中声明依赖
 
 ```json
 {
@@ -307,11 +459,67 @@ wasm-pack build --target web
 }
 ```
 
-5. **在插件代码中调用**
+#### 6. 在插件代码中调用
 
 ```javascript
-const reqId = utools.wasm.__wasm_call('crypto.sha256', '"hello"');
+utools.onPluginReady(() => {
+  if (utools.wasm.__wasm_has('crypto.sha256')) {
+    const reqId = utools.wasm.__wasm_call('crypto.sha256', '"hello"');
+    let result = null;
+    while (!result) {
+      result = utools.wasm.__wasm_get_result(reqId);
+    }
+    const parsed = JSON.parse(result);
+    if (parsed.success) {
+      console.log('SHA256:', parsed.result);
+    }
+  }
+});
 ```
+
+---
+
+## 前端集成
+
+### PatchLoader 初始化
+
+```typescript
+import { patchLoader } from '$lib/plugins/patch-loader';
+
+// 在 +page.svelte onMount 中
+patchLoader.init().then(() => {
+  console.log('WASM Patch 加载器就绪');
+});
+```
+
+**PatchLoader 职责**：
+- 监听 `wasm-load-patch` 事件，加载指定 Patch
+- 监听 `wasm-call` 事件，执行 WASM 函数
+- 调用 `wasm_register_functions` 注册 WASM 函数
+- 调用 `wasm_store_call_result` 存储 WASM 执行结果
+
+### PluginService
+
+```typescript
+import { pluginService } from '$lib/plugins/service';
+
+// 扫描插件
+const plugins = await pluginService.init();
+
+// 加载插件
+await invoke('load_plugin', { id: 'hello-world' });
+
+// 搜索插件
+const results = await invoke('find_plugins_by_prefix', { prefix: 'hw' });
+```
+
+**PluginService 职责**：
+- 初始化插件系统
+- 管理插件生命周期
+- 提供插件搜索功能
+- 同步插件状态
+
+---
 
 ## 插件开发示例
 
@@ -359,8 +567,8 @@ plugins/file-search/
     └── file-index/
         ├── src/lib.rs
         └── pkg/
-            ├── file_index.js
-            ├── file_index_bg.wasm
+            ├── file-index.js
+            ├── file-index_bg.wasm
             └── package.json
 ```
 
@@ -370,44 +578,16 @@ utools.onPluginReady(() => {
   // 检查 WASM 函数是否可用
   if (utools.wasm.__wasm_has('file-index.build_index')) {
     const reqId = utools.wasm.__wasm_call('file-index.build_index', '"/home/user"');
-
+    
     let result = null;
     while (!result) {
       result = utools.wasm.__wasm_get_result(reqId);
     }
-
+    
     const parsed = JSON.parse(result);
     if (parsed.success) {
       console.log('索引构建完成:', parsed.result);
     }
   }
 });
-```
-
-## 前端集成
-
-### PatchLoader 初始化
-
-```typescript
-import { patchLoader } from '$lib/plugins/patch-loader';
-
-// 在 +page.svelte onMount 中
-patchLoader.init().then(() => {
-  console.log('WASM Patch 加载器就绪');
-});
-```
-
-### 插件服务
-
-```typescript
-import { pluginService } from '$lib/plugins/service';
-
-// 扫描插件
-const plugins = await pluginService.init();
-
-// 加载插件
-await invoke('load_plugin', { id: 'hello-world' });
-
-// 搜索插件
-const results = await invoke('find_plugins_by_prefix', { prefix: 'hw' });
 ```
