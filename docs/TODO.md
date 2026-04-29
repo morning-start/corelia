@@ -58,10 +58,10 @@
 
 | 任务 | 状态 | 优先级 | 说明 | 关联文件 |
 |------|:----:|:------:|------|----------|
-| 插件状态机与 VM 管理解耦 | ⬜ | P0 | PluginLoader 管理状态，QuickJSRuntime 管理 VM | [`loader/`](src-tauri/src/plugins/loader/), [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
-| API Bridge 职责单一化 | ⬜ | P1 | 仅负责 API 注入，不包含业务逻辑 | [`api_bridge/`](src-tauri/src/plugins/api_bridge/) |
-| Commands 层仅做参数转发 | ⬜ | P1 | 不包含业务逻辑，调用 Service 层处理 | [`commands/`](src-tauri/src/commands/) |
-| Services 层职责明确 | ⬜ | P1 | 每个 Service 单一职责，独立可测试 | [`services/`](src-tauri/src/services/) |
+| 插件状态机与 VM 管理解耦 | ✅ | P0 | PluginLoader 管理状态，QuickJSRuntime 管理 VM | [`loader/`](src-tauri/src/plugins/loader/), [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
+| API Bridge 职责单一化 | ✅ | P1 | 仅负责 API 注入，不包含业务逻辑 | [`api_bridge/`](src-tauri/src/plugins/api_bridge/) |
+| Commands 层仅做参数转发 | ✅ | P1 | 不包含业务逻辑，调用 Service 层处理 | [`commands/`](src-tauri/src/commands/) |
+| Services 层职责明确 | ✅ | P1 | 每个 Service 单一职责，独立可测试 | [`services/`](src-tauri/src/services/) |
 
 ### 跨层职责边界
 
@@ -198,6 +198,6 @@
 
 ---
 
-*文档版本: 1.3*  
+*文档版本: 1.4*  
 *最后更新: 2026-04-29*  
-*状态: 活跃* | *职责划分优化任务前端部分已完成*
+*状态: 活跃* | *职责划分优化任务全部完成*
