@@ -48,11 +48,11 @@
 
 | 任务 | 状态 | 优先级 | 说明 | 关联文件 |
 |------|:----:|:------:|------|----------|
-| 移除前端 VM 缓存 | ⬜ | P0 | 前端不维护 VM 状态，纯代理后端管理 | [`service.ts`](src/lib/plugins/service.ts) |
-| 明确 Service 层与 Store 层职责 | ⬜ | P0 | Service 负责业务逻辑，Store 负责状态管理 | [`stores/`](src/lib/stores/), [`services/`](src/lib/services/) |
-| 插件搜索并行化实现 | ⬜ | P0 | 使用 Promise.allSettled 并行执行插件搜索 | [`search/plugin.ts`](src/lib/stores/search/plugin.ts) |
-| 历史记录管理独立模块 | ⬜ | P1 | 从 executor 中剥离历史记录功能 | [`services/history.ts`](src/lib/services/history.ts) |
-| 窗口管理独立模块 | ⬜ | P1 | 从 executor 中剥离窗口控制功能 | [`services/window.ts`](src/lib/services/window.ts) |
+| 移除前端 VM 缓存 | ✅ | P0 | 前端不维护 VM 状态，纯代理后端管理 | [`service.ts`](src/lib/plugins/service.ts) |
+| 明确 Service 层与 Store 层职责 | ✅ | P0 | Service 负责业务逻辑，Store 负责状态管理 | [`stores/`](src/lib/stores/), [`services/`](src/lib/services/) |
+| 插件搜索并行化实现 | ✅ | P0 | 使用 Promise.allSettled 并行执行插件搜索 | [`search/plugin.ts`](src/lib/stores/search/plugin.ts) |
+| 历史记录管理独立模块 | ✅ | P1 | 从 executor 中剥离历史记录功能 | [`services/history.ts`](src/lib/services/history.ts) |
+| 窗口管理独立模块 | ✅ | P1 | 从 executor 中剥离窗口控制功能 | [`services/window.ts`](src/lib/services/window.ts) |
 
 ### 后端层职责划分
 
@@ -184,13 +184,12 @@
 | `rquickjs` 异步支持不足 | 中 | 观察中 | WASM 结果轮询方案已落地，后续关注版本更新 |
 | 插件内存泄漏（VM 未释放）| 高 | 待修复 | 完善 `unload_plugin` 调用点，增加 VM 监控 |
 | macOS 平台测试缺失 | 低 | 可接受 | MVP 阶段聚焦 Windows，Beta 阶段再适配 |
-| 前端 VM 缓存与后端不一致 | 高 | 待修复 | 移除前端 VM 缓存，统一由后端管理 |
 
 ---
 
 ## 下一步行动（本周）
 
-1. **移除** 前端 VM 缓存，统一由后端管理
+1. ✅ **移除** 前端 VM 缓存，统一由后端管理
 2. **修复** `calc` 插件浮点精度问题
 3. **实现** 插件 VM 闲置超时自动清理逻辑
 4. **完善** 插件加载失败时的错误提示（前端 Toast）
@@ -199,6 +198,6 @@
 
 ---
 
-*文档版本: 1.2*  
+*文档版本: 1.3*  
 *最后更新: 2026-04-29*  
-*状态: 活跃* | *新增职责划分优化任务*
+*状态: 活跃* | *职责划分优化任务前端部分已完成*

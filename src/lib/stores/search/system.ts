@@ -1,5 +1,5 @@
 import { writable, derived, get, type Readable, type Writable } from 'svelte/store';
-import { search, type SearchItem } from '$lib/search/fuzzy';
+import { search, type SearchItem, type FilterResult } from '$lib/search/fuzzy';
 import { createSystemItems, type ExecutableItem } from '$lib/services/executor';
 
 export type { SearchItem };
@@ -23,7 +23,12 @@ class SystemSearchStore {
           set([]);
           return;
         }
-        set(search($query, $items));
+        const searchResults = search($query, $items as unknown as SearchItem[]);
+        const systemResults: SystemSearchResult[] = searchResults.map(result => ({
+          original: result.original as unknown as ExecutableItem,
+          score: result.score
+        }));
+        set(systemResults);
       }
     );
   }
@@ -31,7 +36,12 @@ class SystemSearchStore {
   search(query: string): SystemSearchResult[] {
     if (!query.trim()) return [];
     const items = get(this.items);
-    return search(query, items);
+    const searchResults = search(query, items as unknown as SearchItem[]);
+    const systemResults: SystemSearchResult[] = searchResults.map(result => ({
+      original: result.original as unknown as ExecutableItem,
+      score: result.score
+    }));
+    return systemResults;
   }
 
   addItem(item: ExecutableItem) {

@@ -41,7 +41,6 @@
   /** 取消订阅函数列表 */
   let unsubQuery: (() => void) | undefined;
   let unsubResults: (() => void) | undefined;
-  let unsubHistory: (() => void) | undefined;
   let unsubUser: (() => void) | undefined;
 
   /** 历史记录保存防抖定时器（用户停止输入后才记录） */
@@ -100,8 +99,10 @@
     unsubResults = searchStore.results.subscribe(v => {
       resultsValue = filterResultsByCategory(v);
     });
-    unsubHistory = searchHistory.subscribe(state => {
-      historyItems = state.items.slice(0, SEARCH_CONFIG.DISPLAYED_HISTORY_COUNT).map(item => item.query);
+
+    // 初始化历史记录显示
+    $effect(() => {
+      historyItems = searchHistory.items.slice(0, SEARCH_CONFIG.DISPLAYED_HISTORY_COUNT).map(item => item.query);
     });
 
     // 注册全局快捷键
@@ -122,7 +123,6 @@
     return () => {
       unsubQuery?.();
       unsubResults?.();
-      unsubHistory?.();
       unsubUser?.();
       unlistenFocus.then(unlisten => unlisten());
     };

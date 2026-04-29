@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import type { ExecutableItem } from './system';
-import type { PluginSearchResult } from './plugin';
+import type { PluginSearchResult } from '$lib/plugins/types';
 
 export interface ExtendedSearchResult {
   original: ExecutableItem;

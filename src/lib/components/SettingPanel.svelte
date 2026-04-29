@@ -149,21 +149,21 @@
         <div class="theme-options">
           <button
             class="theme-btn"
-            class:active={$theme === 'dark'}
+            class:active={theme.current === 'dark'}
             onclick={() => handleThemeChange('dark')}
           >
             深色
           </button>
           <button
             class="theme-btn"
-            class:active={$theme === 'light'}
+            class:active={theme.current === 'light'}
             onclick={() => handleThemeChange('light')}
           >
             浅色
           </button>
           <button
             class="theme-btn"
-            class:active={$theme === 'system'}
+            class:active={theme.current === 'system'}
             onclick={() => handleThemeChange('system')}
           >
             跟随系统
