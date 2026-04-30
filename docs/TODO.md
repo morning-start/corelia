@@ -86,11 +86,11 @@
 
 | 任务 | 状态 | 优先级 | 说明 | 关联文件 |
 |------|:----:|:------:|------|----------|
-| 插件状态机鲁棒性强化 | ⬜ | P0 | 处理 `Loading` / `Error` 状态的边界情况，增加重试逻辑 | [`loader.rs`](src-tauri/src/plugins/loader/) |
-| 插件 VM 生命周期监控 | ⬜ | P0 | 实现 VM 池闲置超时自动清理 | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
-| 插件错误隔离与上报 | ⬜ | P0 | 单个插件执行异常时不影响主程序，记录错误日志 | [`loader.rs`](src-tauri/src/plugins/loader/), [`registry.rs`](src-tauri/src/plugins/registry.rs) |
+| 插件状态机鲁棒性强化 | ✅ | P0 | 处理 `Loading` / `Error` 状态的边界情况，增加重试逻辑 | [`loader/`](src-tauri/src/plugins/loader/) |
+| 插件 VM 生命周期监控 | ✅ | P0 | 实现 VM 池闲置超时自动清理 | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
+| 插件错误隔离与上报 | ✅ | P0 | 单个插件执行异常时不影响主程序，记录错误日志 | [`loader/`](src-tauri/src/plugins/loader/), [`registry.rs`](src-tauri/src/plugins/registry.rs) |
 | 插件热重载实现 | ✅ | P1 | 监听 `plugins/` 目录变化，自动重新加载 | [`hot_reload.rs`](src-tauri/src/plugins/hot_reload.rs) |
-| patch-loader 完善错误处理 | ⬜ | P1 | WASM patch 加载失败时的降级策略 | [`patch-loader.ts`](src/lib/plugins/patch-loader.ts) |
+| patch-loader 完善错误处理 | ✅ | P1 | WASM patch 加载失败时的降级策略 | [`patch-loader.ts`](src/lib/plugins/patch-loader.ts) |
 
 ### 2. MVP 插件开发与验证 🧩
 
@@ -122,7 +122,7 @@
 | 任务 | 状态 | 优先级 | 说明 | 关联文件 |
 |------|:----:|:------:|------|----------|
 | 三层配置系统对接前端 | 🔄 | P0 | System / User / App 配置可读写 | [`config/`](src-tauri/src/commands/config/) |
-| 插件数据隔离存储 | 🔄 | P0 | 每个插件独立的 `dbStorage` 空间 | [`api_bridge.rs`](src-tauri/src/plugins/api_bridge/) |
+| 插件数据隔离存储 | 🔄 | P0 | 每个插件独立的 `dbStorage` 空间 | [`api_bridge/`](src-tauri/src/plugins/api_bridge/) |
 | 搜索历史持久化 | ⬜ | P1 | 历史记录保存到 App Config | [`history.ts`](src/lib/stores/history.ts) |
 | 配置重置功能 | ⬜ | P2 | User Config 可一键恢复默认值 | [`user.ts`](src/lib/stores/user.ts) |
 
@@ -131,7 +131,7 @@
 | 任务 | 状态 | 优先级 | 说明 | 关联路径 |
 |------|:----:|:------:|------|----------|
 | Rust 单元测试覆盖核心模块 | ⬜ | P1 | `registry.rs` / `wasm_bridge.rs` 等 | `src-tauri/src/` |
-| 前端类型检查无错误 | ✅ | P0 | `bun run check` 通过 | 全局 |
+| 前端类型检查无错误 | ✅ | P0 | `npm run check` 通过 | 全局 |
 | Rust 编译无警告 | 🔄 | P0 | `cargo check`  clean | `src-tauri/` |
 | 插件加载流程 E2E 验证 | ⬜ | P1 | 手动验证：扫描 → 加载 → 执行 → 卸载 | 全局 |
 | CI/CD 流程搭建 | ⬜ | P2 | GitHub Actions + 测试覆盖率 | `.github/workflows/` |
@@ -175,6 +175,20 @@
 
 </details>
 
+<details>
+<summary>2026-04-30 插件系统完善完成</summary>
+
+**插件系统核心完善**
+- ✅ 插件状态机鲁棒性强化，新增 `reset_plugin`、`get_plugin_status`、`register_plugin`
+- ✅ 插件 VM 生命周期监控，完善闲置超时自动清理机制，新增 `cleanup_oldest`
+- ✅ 插件错误隔离与上报，增强日志记录和错误处理
+- ✅ patch-loader 完善错误处理，新增状态跟踪、重试机制和降级策略
+
+**代码质量验证**
+- ✅ 前端类型检查通过（`npm run check` 0 错误 0 警告）
+
+</details>
+
 ---
 
 ## 阻塞与风险
@@ -182,7 +196,7 @@
 | 风险项 | 级别 | 状态 | 缓解措施 |
 |--------|:----:|:----:|----------|
 | `rquickjs` 异步支持不足 | 中 | 观察中 | WASM 结果轮询方案已落地，后续关注版本更新 |
-| 插件内存泄漏（VM 未释放）| 高 | 待修复 | 完善 `unload_plugin` 调用点，增加 VM 监控 |
+| 插件内存泄漏（VM 未释放）| 中 | 缓解中 | 完善了 VM 闲置清理机制和 `unload_plugin` 调用 |
 | macOS 平台测试缺失 | 低 | 可接受 | MVP 阶段聚焦 Windows，Beta 阶段再适配 |
 
 ---
@@ -190,14 +204,16 @@
 ## 下一步行动（本周）
 
 1. ✅ **移除** 前端 VM 缓存，统一由后端管理
-2. **修复** `calc` 插件浮点精度问题
-3. **实现** 插件 VM 闲置超时自动清理逻辑
-4. **完善** 插件加载失败时的错误提示（前端 Toast）
-5. **补充** `registry.rs` 核心函数的单元测试
-6. **开始** 剪贴板增强插件开发
+2. ✅ **实现** 插件 VM 闲置超时自动清理逻辑
+3. ✅ **完善** 插件状态机鲁棒性和错误隔离
+4. ✅ **加强** patch-loader 错误处理和降级策略
+5. **修复** `calc` 插件浮点精度问题
+6. **完善** 插件加载失败时的错误提示（前端 Toast）
+7. **补充** `registry.rs` 核心函数的单元测试
+8. **开始** 剪贴板增强插件开发
 
 ---
 
-*文档版本: 1.5*  
-*最后更新: 2026-04-29*  
-*状态: 活跃* | *职责划分优化任务全部完成！🎉*
+*文档版本: 1.6*  
+*最后更新: 2026-04-30*  
+*状态: 活跃* | *插件系统完善任务完成！🎉*

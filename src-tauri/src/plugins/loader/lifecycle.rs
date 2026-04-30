@@ -11,12 +11,13 @@ impl super::PluginLoader {
         match &instance.state {
             PluginState::Loading => {
                 let vm = instance.vm_id.clone();
-                println!("[PluginLoader] 插件 {} 正在加载中，跳过重复加载请求", id);
+                println!("[PluginLoader] 📌 插件 {} 正在加载中，跳过重复加载请求", id);
                 return Ok((instance.state.clone(), vm));
             }
             PluginState::Ready => {
                 let vm = instance.vm_id.clone();
                 instance.last_used = Some(Instant::now());
+                println!("[PluginLoader] ✅ 插件 {} 已就绪，直接返回", id);
                 return Ok((instance.state.clone(), vm));
             }
             PluginState::Error(ref err_msg) => {
@@ -25,7 +26,7 @@ impl super::PluginLoader {
                         "插件 {} 加载失败次数已达上限 ({}): {}",
                         id, instance.max_retries, err_msg
                     );
-                    eprintln!("[PluginLoader] {}", msg);
+                    eprintln!("[PluginLoader] 🚨 {}", msg);
                     return Err(msg);
                 }
                 if let Some(retry_after) = instance.retry_after {
@@ -35,24 +36,24 @@ impl super::PluginLoader {
                             "插件 {} 重试冷却中，请等待 {} 秒后再试",
                             id, remaining
                         );
-                        println!("[PluginLoader] {}", msg);
+                        println!("[PluginLoader] ⏳ {}", msg);
                         return Err(msg);
                     }
                 }
                 println!(
-                    "[PluginLoader] 插件 {} 处于 Error 状态，尝试第 {} 次重载...",
+                    "[PluginLoader] 🔄 插件 {} 处于 Error 状态，尝试第 {} 次重载...",
                     id, instance.load_error_count + 1
                 );
             }
             PluginState::Cached => {
-                println!("[PluginLoader] 插件 {} 处于 Cached 状态，重新加载...", id);
+                println!("[PluginLoader] 📦 插件 {} 处于 Cached 状态，重新加载...", id);
             }
             PluginState::MetaLoaded | PluginState::Unloaded => {}
         }
 
         if let Ok(cleaned) = self.quickjs_runtime.cleanup() {
             if cleaned > 0 {
-                println!("[PluginLoader] 清理了 {} 个闲置 VM", cleaned);
+                println!("[PluginLoader] 🧹 清理了 {} 个闲置 VM", cleaned);
             }
         }
 
@@ -106,7 +107,7 @@ impl super::PluginLoader {
             eprintln!("[PluginLoader] ❌ 插件 {} API 注入失败: {}", id, e);
             return Err(format!("API 注入失败: {}", e));
         }
-        println!("[PluginLoader] API 注入成功: {}", id);
+        println!("[PluginLoader] ✅ API 注入成功: {}", id);
 
         let patches = instance.manifest.patches.clone();
         let plugin_dir = instance.plugin_dir.clone();
@@ -131,7 +132,7 @@ impl super::PluginLoader {
                 instance.retry_after = None;
                 instance.retry_backoff_ms = 1000;
 
-                println!("[PluginLoader] 插件加载成功: {} (VM: {})", id, vm_id);
+                println!("[PluginLoader] 🎉 插件加载成功: {} (VM: {})", id, vm_id);
                 Ok((instance.state.clone(), Some(vm_id)))
             }
             Err(e) => {
@@ -235,7 +236,7 @@ impl super::PluginLoader {
             .ok_or_else(|| format!("插件不存在: {}", id))?;
 
         if instance.state == PluginState::Loading {
-            println!("[PluginLoader] 插件 {} 正在加载中，等待完成后再卸载", id);
+            println!("[PluginLoader] ⏳ 插件 {} 正在加载中，等待完成后再卸载", id);
         }
 
         if let Some(app) = crate::plugins::api_bridge::get_app_handle() {
@@ -245,10 +246,10 @@ impl super::PluginLoader {
         if let Some(ref vm_id) = instance.vm_id {
             match self.quickjs_runtime.destroy_vm(vm_id) {
                 Ok(_) => {
-                    println!("[PluginLoader] VM 已销毁: {} (插件: {})", vm_id, id);
+                    println!("[PluginLoader] 🗑️ VM 已销毁: {} (插件: {})", vm_id, id);
                 }
                 Err(e) => {
-                    eprintln!("[PluginLoader] 销毁 VM 失败: {} (插件: {})，将标记为孤儿 VM", e, id);
+                    eprintln!("[PluginLoader] ⚠️ 销毁 VM 失败: {} (插件: {})，将标记为孤儿 VM", e, id);
                 }
             }
         }
@@ -264,7 +265,7 @@ impl super::PluginLoader {
         instance.retry_backoff_ms = 1000;
         instance.retry_after = None;
 
-        println!("[PluginLoader] 插件已卸载: {} (旧状态: {})", id, old_state);
+        println!("[PluginLoader] 🔒 插件已卸载: {} (旧状态: {:?})", id, old_state);
         Ok(())
     }
 
@@ -302,11 +303,11 @@ impl super::PluginLoader {
                 };
 
                 if should_cleanup {
-                    println!("[PluginLoader] 插件 {} 闲置超过 {}s，执行缓存清理", id, idle_timeout_secs);
+                    println!("[PluginLoader] 📦 插件 {} 闲置超过 {}s，执行缓存清理", id, idle_timeout_secs);
 
                     if let Some(ref vm_id) = instance.vm_id {
                         if let Err(e) = self.quickjs_runtime.destroy_vm(vm_id) {
-                            eprintln!("[PluginLoader] 清理 VM 失败 ({}): {}", id, e);
+                            eprintln!("[PluginLoader] ⚠️ 清理 VM 失败 ({}): {}", id, e);
                         }
                     }
 
@@ -319,7 +320,7 @@ impl super::PluginLoader {
         }
 
         if cleaned > 0 {
-            println!("[PluginLoader] 共清理 {} 个闲置插件", cleaned);
+            println!("[PluginLoader] 🧹 共清理 {} 个闲置插件", cleaned);
         }
         cleaned
     }

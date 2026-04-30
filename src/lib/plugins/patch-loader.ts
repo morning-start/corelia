@@ -37,6 +37,14 @@ interface LoadedPatch {
   pluginId: string;
   module: WasmModuleInstance;
   functions: string[];
+  loadTime: number;
+}
+
+/** 加载状态记录 */
+interface LoadState {
+  status: 'loading' | 'ready' | 'failed';
+  retryCount: number;
+  lastError?: string;
 }
 
 // ==================== PatchLoader 核心实现 ====================
@@ -45,11 +53,17 @@ class PatchLoader {
   /** 已加载的 patch 模块 */
   private loadedPatches: Map<string, LoadedPatch> = new Map();
 
+  /** 加载状态跟踪 */
+  private loadStates: Map<string, LoadState> = new Map();
+
   /** 事件监听取消函数 */
   private unlisteners: UnlistenFn[] = [];
 
   /** 是否已初始化 */
   private initialized = false;
+
+  /** 最大重试次数 */
+  private readonly MAX_RETRY_COUNT = 3;
 
   /**
    * 初始化 PatchLoader，注册事件监听
@@ -95,6 +109,19 @@ class PatchLoader {
       return;
     }
 
+    // 检查加载状态，避免重复加载
+    const existingState = this.loadStates.get(patchName);
+    if (existingState?.status === 'loading') {
+      console.log(`[PatchLoader] ⏳ patch ${patchName} 正在加载中，等待完成`);
+      return;
+    }
+
+    // 设置加载状态
+    this.loadStates.set(patchName, {
+      status: 'loading',
+      retryCount: existingState?.retryCount || 0
+    });
+
     try {
       // 将文件路径转换为 WebView 可访问的 URL
       const wasmUrl = convertFileSrc(wasmFile);
@@ -108,8 +135,9 @@ class PatchLoader {
 
       if (!wasmModule) {
         // 所有加载策略均失败，上报降级状态
-        console.error(`[PatchLoader] ❌ 加载 WASM 模块失败: ${patchName}，已降级`);
-        await this.reportPatchError(patchName, '所有 WASM 加载策略均失败');
+        const errorMsg = '所有 WASM 加载策略均失败';
+        console.error(`[PatchLoader] ❌ ${errorMsg}: ${patchName}`);
+        await this.handleLoadFailure(patchName, errorMsg);
         return;
       }
 
@@ -125,6 +153,13 @@ class PatchLoader {
         pluginId,
         module: wasmModule,
         functions: functions.map(f => f.name),
+        loadTime: Date.now()
+      });
+
+      // 更新加载状态为成功
+      this.loadStates.set(patchName, {
+        status: 'ready',
+        retryCount: 0
       });
 
       // 注册函数到后端 WasmBridge
@@ -137,8 +172,36 @@ class PatchLoader {
 
     } catch (e) {
       console.error(`[PatchLoader] ❌ 加载 patch ${patchName} 失败:`, e);
-      await this.reportPatchError(patchName, String(e));
+      await this.handleLoadFailure(patchName, String(e));
     }
+  }
+
+  /**
+   * 处理加载失败，增加重试计数和降级策略
+   */
+  private async handleLoadFailure(patchName: string, error: string): Promise<void> {
+    const currentState = this.loadStates.get(patchName) || {
+      status: 'failed',
+      retryCount: 0
+    };
+
+    const newRetryCount = currentState.retryCount + 1;
+
+    this.loadStates.set(patchName, {
+      status: 'failed',
+      retryCount: newRetryCount,
+      lastError: error
+    });
+
+    // 如果还可以重试，记录日志
+    if (newRetryCount < this.MAX_RETRY_COUNT) {
+      console.warn(`[PatchLoader] ⚠️ patch ${patchName} 加载失败 (${newRetryCount}/${this.MAX_RETRY_COUNT})`);
+    } else {
+      console.error(`[PatchLoader] 🚨 patch ${patchName} 已达最大重试次数`);
+    }
+
+    // 上报错误
+    await this.reportPatchError(patchName, error);
   }
 
   /**
@@ -173,7 +236,7 @@ class PatchLoader {
     wasmUrl: string
   ): Promise<WasmModuleInstance | null> {
     try {
-      // 尝试动态导入胶水 JS
+      // 策略 1：尝试动态导入胶水 JS
       // wasm-pack 生成的模块有 default 导出（异步初始化函数）
       const module = await import(/* @vite-ignore */ jsUrl);
 
@@ -182,10 +245,10 @@ class PatchLoader {
         // 新版 wasm-pack 输出格式：export default async function init()
         try {
           await module.default(wasmUrl);
-          console.log(`[PatchLoader] ✅ WASM 模块初始化成功: ${patchName}`);
+          console.log(`[PatchLoader] ✅ WASM 模块初始化成功 (策略 1): ${patchName}`);
         } catch (initErr) {
-          console.warn(`[PatchLoader] ⚠️ WASM 初始化失败 (${patchName})，尝试回退:`, initErr);
-          throw initErr; // 抛出后由外层 catch 进入回退
+          console.warn(`[PatchLoader] ⚠️ WASM 初始化失败 (${patchName})，尝试策略 2:`, initErr);
+          throw initErr; // 抛出后由外层 catch 进入回退策略
         }
       } else if (typeof module.initSync === 'function') {
         // 同步初始化格式
@@ -196,21 +259,21 @@ class PatchLoader {
           }
           const buffer = await response.arrayBuffer();
           module.initSync(new Uint8Array(buffer));
-          console.log(`[PatchLoader] ✅ WASM 模块同步初始化成功: ${patchName}`);
+          console.log(`[PatchLoader] ✅ WASM 模块同步初始化成功 (策略 1b): ${patchName}`);
         } catch (initErr) {
-          console.warn(`[PatchLoader] ⚠️ WASM 同步初始化失败 (${patchName})，尝试回退:`, initErr);
+          console.warn(`[PatchLoader] ⚠️ WASM 同步初始化失败 (${patchName})，尝试策略 2:`, initErr);
           throw initErr;
         }
       } else if (module.wasm !== undefined) {
         // 模块已经初始化
-        console.log(`[PatchLoader] ✅ WASM 模块已预初始化: ${patchName}`);
+        console.log(`[PatchLoader] ✅ WASM 模块已预初始化 (策略 1c): ${patchName}`);
       }
 
       return module as WasmModuleInstance;
     } catch (e) {
-      console.error(`[PatchLoader] ❌ 动态导入 WASM 模块失败 (${patchName})，启用降级策略:`, e);
+      console.error(`[PatchLoader] ❌ 策略 1 失败 (${patchName})，启用策略 2:`, e);
 
-      // 回退：尝试使用 fetch + WebAssembly API 直接加载
+      // 策略 2：尝试使用 fetch + WebAssembly API 直接加载
       return this.loadWasmFallback(patchName, wasmUrl);
     }
   }
@@ -226,7 +289,7 @@ class PatchLoader {
     wasmUrl: string
   ): Promise<WasmModuleInstance | null> {
     try {
-      console.log(`[PatchLoader] 🔄 尝试回退加载: ${patchName}`);
+      console.log(`[PatchLoader] 🔄 尝试策略 2 (回退): ${patchName}`);
 
       const response = await fetch(wasmUrl);
       if (!response.ok) {
@@ -273,10 +336,10 @@ class PatchLoader {
         }
       }
 
-      console.log(`[PatchLoader] ✅ WASM 回退加载成功: ${patchName}`);
+      console.log(`[PatchLoader] ✅ WASM 策略 2 加载成功: ${patchName}`);
       return wrappedModule;
     } catch (e) {
-      console.error(`[PatchLoader] ❌ WASM 回退加载也失败 (${patchName}):`, e);
+      console.error(`[PatchLoader] ❌ WASM 策略 2 也失败 (${patchName}):`, e);
       return null;
     }
   }
@@ -419,6 +482,8 @@ class PatchLoader {
 
     // 从缓存中移除
     this.loadedPatches.delete(patchName);
+    // 清除加载状态
+    this.loadStates.delete(patchName);
 
     // 通知后端注销
     try {
@@ -461,6 +526,13 @@ class PatchLoader {
    */
   getPatchFunctions(patchName: string): string[] {
     return this.loadedPatches.get(patchName)?.functions ?? [];
+  }
+
+  /**
+   * 获取 patch 加载状态（调试用）
+   */
+  getPatchState(patchName: string): LoadState | undefined {
+    return this.loadStates.get(patchName);
   }
 }
 

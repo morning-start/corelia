@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 use rquickjs::{Context, Runtime, Value};
-use std::time::{Instant, SystemTime};
+use std::time::{Instant, SystemTime, Duration};
 
 #[derive(Debug, Clone)]
 pub struct QuickJSConfig {
@@ -78,10 +78,24 @@ impl QuickJSRuntime {
     pub fn create_vm(&self) -> Result<String, String> {
         let mut pool = self.vm_pool.lock().map_err(|e| format!("获取 VM 池锁失败: {}", e))?;
         
+        // 先尝试清理闲置 VM，为新 VM 腾出空间
+        let timeout_secs = self.config.idle_timeout_secs;
+        let original_len = pool.len();
+        let to_remove: Vec<String> = pool
+            .iter()
+            .filter(|vm| vm.is_idle_timeout(timeout_secs))
+            .map(|vm| vm.id.clone())
+            .collect();
+        if !to_remove.is_empty() {
+            pool.retain(|vm| !to_remove.contains(&vm.id));
+            println!("[QuickJSRuntime] 🧹 自动清理 {} 个闲置 VM 为新 VM 腾出空间", original_len - pool.len());
+        }
+        
         if pool.len() >= self.config.max_vm_count {
             return Err(format!(
-                "VM pool is full (max: {})",
-                self.config.max_vm_count
+                "VM pool is full (max: {}, current: {})",
+                self.config.max_vm_count,
+                pool.len()
             ));
         }
         
@@ -89,6 +103,7 @@ impl QuickJSRuntime {
         let vm = VmInstance::new(vm_id.clone())?;
         pool.push(vm);
         
+        println!("[QuickJSRuntime] ✅ VM 创建成功: {} (当前 {} 个活跃)", vm_id, pool.len());
         Ok(vm_id)
     }
     
@@ -102,6 +117,7 @@ impl QuickJSRuntime {
             return Err(format!("VM not found: {}", vm_id));
         }
         
+        println!("[QuickJSRuntime] 🗑️ VM 已销毁: {} (剩余 {} 个活跃)", vm_id, pool.len());
         Ok(())
     }
     
@@ -142,7 +158,7 @@ impl QuickJSRuntime {
             .collect();
 
         if !to_remove.is_empty() {
-            println!("[QuickJSRuntime] 发现 {} 个闲置超时 VM（超时: {}s），准备清理...", to_remove.len(), timeout_secs);
+            println!("[QuickJSRuntime] 🔍 发现 {} 个闲置超时 VM（超时: {}s），准备清理...", to_remove.len(), timeout_secs);
         }
 
         pool.retain(|vm| !to_remove.contains(&vm.id));
@@ -151,6 +167,35 @@ impl QuickJSRuntime {
         if removed_count > 0 {
             println!("[QuickJSRuntime] ✅ 已清理 {} 个闲置超时 VM，剩余 {} 个活跃 VM", removed_count, pool.len());
         }
+        Ok(removed_count)
+    }
+
+    /// 强制清理指定数量的最旧 VM
+    pub fn cleanup_oldest(&self, count: usize) -> Result<usize, String> {
+        let mut pool = self.vm_pool.lock().map_err(|e| format!("获取 VM 池锁失败: {}", e))?;
+        let original_len = pool.len();
+        
+        if count == 0 || pool.is_empty() {
+            return Ok(0);
+        }
+        
+        // 按最后使用时间排序，清理最久未使用的
+        let mut indices: Vec<usize> = (0..pool.len()).collect();
+        indices.sort_by_key(|&i| pool[i].last_used_at);
+        
+        let to_remove: Vec<String> = indices
+            .iter()
+            .take(count)
+            .map(|&i| pool[i].id.clone())
+            .collect();
+        
+        pool.retain(|vm| !to_remove.contains(&vm.id));
+        
+        let removed_count = original_len - pool.len();
+        if removed_count > 0 {
+            println!("[QuickJSRuntime] 🗑️ 已强制清理 {} 个最旧 VM，剩余 {} 个活跃 VM", removed_count, pool.len());
+        }
+        
         Ok(removed_count)
     }
 
@@ -253,6 +298,14 @@ pub async fn quickjs_cleanup(
     runtime: tauri::State<'_, QuickJSRuntime>,
 ) -> Result<usize, String> {
     runtime.cleanup()
+}
+
+#[tauri::command]
+pub async fn quickjs_cleanup_oldest(
+    count: usize,
+    runtime: tauri::State<'_, QuickJSRuntime>,
+) -> Result<usize, String> {
+    runtime.cleanup_oldest(count)
 }
 
 #[tauri::command]
