@@ -73,6 +73,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
+        .plugin(tauri_plugin_notification::init())
         .manage(shared_runtime)  // 注册 QuickJS 运行时管理器
         .manage(shared_loader)   // 注册插件加载器
         .manage(plugin_service)  // 注册插件服务（职责划分新增）

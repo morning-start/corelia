@@ -21,15 +21,14 @@ export interface HistoryItem {
 
 const STORAGE_KEY = 'search_history';
 const DEFAULT_MAX_CAPACITY = 100;
+const DEBOUNCE_DELAY = 500;
 
 class HistoryService {
   private items: HistoryItem[] = [];
   private maxCapacity: number = DEFAULT_MAX_CAPACITY;
+  private pendingSave: boolean = false;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /**
-   * 初始化历史记录服务
-   * 从持久化存储加载历史记录
-   */
   async init(): Promise<void> {
     try {
       const stored = await api.store.load(STORAGE_KEY);
@@ -41,21 +40,12 @@ class HistoryService {
     }
   }
 
-  /**
-   * 设置最大容量
-   *
-   * @param capacity - 最大历史记录条数
-   */
   setMaxCapacity(capacity: number): void {
     this.maxCapacity = capacity;
     this.trimIfNeeded();
+    this.scheduleSave();
   }
 
-  /**
-   * 添加搜索记录
-   *
-   * @param query - 搜索词
-   */
   add(query: string): void {
     if (!query.trim()) return;
 
@@ -73,23 +63,15 @@ class HistoryService {
     }
 
     this.trimIfNeeded();
-    this.save();
+    this.scheduleSave();
   }
 
-  /**
-   * 清空所有历史记录
-   */
   async clear(): Promise<void> {
     this.items = [];
+    this.cancelPendingSave();
     await api.store.delete(STORAGE_KEY);
   }
 
-  /**
-   * 获取最近的搜索记录
-   *
-   * @param limit - 返回条数限制
-   * @returns 搜索词列表
-   */
   getRecent(limit: number = 10): string[] {
     return [...this.items]
       .sort((a, b) => b.timestamp - a.timestamp)
@@ -97,29 +79,16 @@ class HistoryService {
       .map(item => item.query);
   }
 
-  /**
-   * 获取所有历史记录（按使用频率和时间排序）
-   *
-   * @returns 历史记录列表
-   */
   getAll(): HistoryItem[] {
     return [...this.items]
       .sort((a, b) => b.count - a.count || b.timestamp - a.timestamp);
   }
 
-  /**
-   * 删除指定的历史记录
-   *
-   * @param query - 要删除的搜索词
-   */
   remove(query: string): void {
     this.items = this.items.filter(item => item.query !== query);
-    this.save();
+    this.scheduleSave();
   }
 
-  /**
-   * 内部方法：如果超过容量则裁剪
-   */
   private trimIfNeeded(): void {
     if (this.items.length > this.maxCapacity) {
       this.items = this.items
@@ -128,9 +97,29 @@ class HistoryService {
     }
   }
 
-  /**
-   * 内部方法：保存到持久化存储
-   */
+  private scheduleSave(): void {
+    if (this.pendingSave) return;
+    
+    this.pendingSave = true;
+    this.saveTimer = setTimeout(() => {
+      this.flushSave();
+    }, DEBOUNCE_DELAY);
+  }
+
+  private cancelPendingSave(): void {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    this.pendingSave = false;
+  }
+
+  private flushSave(): void {
+    this.pendingSave = false;
+    this.saveTimer = null;
+    this.save();
+  }
+
   private save(): void {
     api.store.save(STORAGE_KEY, this.items).catch(e => {
       console.error('[HistoryService] 保存历史记录失败:', e);
@@ -138,6 +127,5 @@ class HistoryService {
   }
 }
 
-/** 历史记录服务单例 */
 export const historyService = new HistoryService();
 export default historyService;

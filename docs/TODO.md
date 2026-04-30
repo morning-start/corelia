@@ -36,9 +36,9 @@
 | 任务 | 状态 | 优先级 | 说明 |
 |------|:----:|:------:|------|
 | 插件目录 IO 缓存（监听文件系统 mtime） | ✅ | P2 | 通过热重载模块实现 |
-| Clipboard 全局实例复用 | ⬜ | P3 | `api_bridge.rs:166` 每次新建实例 |
-| History 增量写入 | ⬜ | P3 | `history.ts:70` 每次全量写入 |
-| 通知改用 tauri-plugin-notification | ⬜ | P3 | 替代当前 powershell 方案 |
+| Clipboard 全局实例复用 | ✅ | P3 | 使用 `Lazy<Mutex<Clipboard>>` 全局实例 |
+| History 增量写入 | ✅ | P3 | 使用防抖机制（500ms）批量合并写入 |
+| 通知改用 tauri-plugin-notification | ✅ | P3 | 跨平台通知，替代 PowerShell 方案 |
 
 ---
 
