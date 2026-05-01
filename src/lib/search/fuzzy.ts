@@ -71,11 +71,25 @@ export class IncrementalSearchIndex {
   search(query: string): FilterResult<SearchItem>[] {
     const queryLower = query.toLowerCase();
     const queryHasChinese = containsChinese(query);
-    const queryPinyin = queryHasChinese ? getPinyin(query) : query;
+    
+    if (!queryHasChinese) {
+      const matchedItems: SearchItem[] = [];
+      for (const [_, indexEntry] of this.index) {
+        const searchTextLower = indexEntry.searchText.toLowerCase();
+        if (searchTextLower.includes(queryLower) || 
+            searchTextLower.includes(queryLower.split('').join(' '))) {
+          matchedItems.push(indexEntry.item);
+        }
+      }
+      return filter(query, matchedItems, {
+        extract: (item) => item.name.toLowerCase() + ' ' + item.description.toLowerCase(),
+      });
+    }
+
+    const queryPinyin = getPinyin(query);
     const queryText = `${queryLower} ${queryPinyin.toLowerCase()}`;
 
     const matchedItems: SearchItem[] = [];
-    
     for (const [_, indexEntry] of this.index) {
       if (indexEntry.searchText.includes(queryText)) {
         matchedItems.push(indexEntry.item);
