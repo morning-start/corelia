@@ -46,27 +46,6 @@ class PluginService {
   /** 是否已初始化 */
   private initialized = false;
 
-  /** 已加载的插件 ID 集合（用于跳过冗余 load 调用） */
-  private loadedPlugins: Set<string> = new Set();
-
-  /**
-   * 确保插件已加载（带本地状态缓存，跳过冗余 IPC）
-   *
-   * @param id - 插件 ID
-   * @returns 插件状态字符串
-   */
-  private async ensureLoaded(id: string): Promise<string> {
-    if (this.loadedPlugins.has(id)) {
-      console.log(`[PluginService] ♻️ 插件 ${id} 已加载，跳过 load`);
-      return 'Ready';
-    }
-    const state = await this.load(id);
-    if (state === 'Ready') {
-      this.loadedPlugins.add(id);
-    }
-    return state;
-  }
-
   /**
    * 初始化插件系统（应用启动时调用）
    *
@@ -81,7 +60,6 @@ class PluginService {
     if (!this.initialized) {
       console.log('[PluginService] 🚀 初始化插件系统...');
 
-      // 扫描插件目录
       const plugins = await this.scan();
       console.log(`[PluginService] ✅ 发现 ${plugins.length} 个插件:`);
       plugins.forEach(p => console.log(`  - ${p.name} (${p.version})`));
@@ -142,10 +120,6 @@ class PluginService {
    */
   async unload(id: string): Promise<void> {
     console.log(`[PluginService] 🗑️ 卸载插件: ${id}`);
-
-    // 清理本地已加载状态
-    this.loadedPlugins.delete(id);
-
     await invoke('unload_plugin', { id });
     console.log(`[PluginService] ✅ 插件 ${id} 已卸载`);
   }
@@ -168,7 +142,7 @@ class PluginService {
    * 在指定插件中执行搜索
    *
    * 执行流程：
-   * 1. 确保插件已加载（带本地缓存，跳过冗余 IPC）
+   * 1. 确保插件已加载
    * 2. 获取或创建该插件的 VM
    * 3. 在 VM 中调用 onSearch(query) 函数
    * 4. 解析返回的 JSON 结果
@@ -189,7 +163,6 @@ class PluginService {
         'search'
       );
 
-      // 如果返回的是错误对象，抛出异常
       const raw = result as unknown as Record<string, unknown>;
       if (raw.error) {
         throw new Error(String(raw.error));
@@ -258,9 +231,8 @@ class PluginService {
     defaultResult: T,
     kind: string
   ): Promise<T> {
-    await this.ensureLoaded(pluginId);
+    await this.load(pluginId);
 
-    // 通过后端命令执行插件代码，VM 生命周期由后端完全管理
     const safeArg = JSON.stringify(arg);
     const safeDefault = JSON.stringify(defaultResult);
     const code = `
@@ -285,13 +257,11 @@ class PluginService {
   }
 
   /**
-   * 获取插件健康状态（替代已移除的 VM 缓存状态）
+   * 获取插件健康状态
    *
    * @returns 活跃 VM 数量和空 entries（前端不再缓存 VM）
    */
   async getCacheStatus(): Promise<{ size: number; entries: Array<{ pluginId: string; vmId: string; lastUsed: number }> }> {
-    // 前端不再缓存 VM，返回空状态
-    // TODO: 可调用后端 get_plugin_health 获取真实的后端状态
     return {
       size: 0,
       entries: []

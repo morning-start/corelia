@@ -1,0 +1,22 @@
+{
+  "name": "app-launcher",
+  "version": "1.0.0",
+  "type": "quickjs",
+  "logo": "",
+  "prefix": "app",
+  "description": "应用启动器，快速打开常用应用程序",
+  "author": "Corelia Team",
+  "main": "index.js",
+  "patches": [],
+  "features": [
+    {
+      "code": "launchApps",
+      "label": "启动应用",
+      "type": "list",
+      "items": [
+        { "label": "🚀 快速启动", "action": "quickLaunch", "icon": "🚀" },
+        { "label": "➕ 添加应用", "action": "addApp", "icon": "➕" }
+      ]
+    }
+  ]
+}

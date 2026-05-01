@@ -1,0 +1,22 @@
+{
+  "name": "shortcuts",
+  "version": "1.0.0",
+  "type": "quickjs",
+  "logo": "",
+  "prefix": "sc",
+  "description": "快捷命令插件，保存和执行自定义命令",
+  "author": "Corelia Team",
+  "main": "index.js",
+  "patches": [],
+  "features": [
+    {
+      "code": "runCmd",
+      "label": "执行命令",
+      "type": "list",
+      "items": [
+        { "label": "⌨️ 执行已保存的命令", "action": "showSaved", "icon": "📋" },
+        { "label": "➕ 添加新命令", "action": "addCmd", "icon": "✨" }
+      ]
+    }
+  ]
+}
