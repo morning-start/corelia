@@ -7,26 +7,27 @@
 
 ## 快速导航
 
-根据你的身份选择合适的文档：
+### 💻 核心开发者
 
-### 👤 普通用户
-
-- [ ] 快速开始指南
-- [ ] 用户使用手册
+| 文档 | 说明 |
+|------|------|
+| [架构概览](./architecture/) | 架构设计总览 |
+| [开发指南](./development/) | MVP 开发指南 |
+| [性能分析](./architecture/performance.md) | 性能瓶颈与优化 |
 
 ### 🔌 插件开发者
 
-- [ ] 插件开发入门
-- [ ] QuickJS 插件开发
-- [ ] Webview 插件开发
-- [ ] API 参考文档
+| 文档 | 说明 |
+|------|------|
+| [插件开发指南](./development/plugin-development.md) | QuickJS/Webview 插件开发 |
+| [插件系统架构](./architecture/plugin-system.md) | 三层插件架构设计 |
 
-### 💻 核心开发者
+### 📚 参考资料
 
-- [**项目架构分析报告**](./PROJECT_ANALYSIS_REPORT.md) - ⭐ 必读
-- [**MVP 开发指南**](./MVP_DEVELOPMENT_GUIDE.md) - ⭐ 必读
-- [架构优化分析](./analysis/ARCHITECTURE_OPTIMIZATION_REPORT.md)
-- [组件详细文档](./components/)
+| 文档 | 说明 |
+|------|------|
+| [竞品分析](./reference/competitors.md) | uTools/ZTools 对比 |
+| [API 参考](./reference/api.md) | API 文档 |
 
 ---
 
@@ -34,17 +35,28 @@
 
 ```
 docs/
-├── README.md                    # 本文档（总入口）
-├── PROJECT_ANALYSIS_REPORT.md   # 项目架构分析报告
-├── MVP_DEVELOPMENT_GUIDE.md     # MVP 开发指南
-├── analysis/                    # 分析文档
-│   └── ARCHITECTURE_OPTIMIZATION_REPORT.md
+├── README.md                    # 本文档
+├── architecture/                # 架构文档
+│   ├── README.md               # 架构概览
+│   ├── tech-stack.md           # 技术栈分析
+│   ├── plugin-system.md        # 插件系统架构
+│   ├── performance.md          # 性能分析
+│   └── security.md             # 安全性分析
+├── development/                 # 开发文档
+│   ├── README.md               # 开发概览
+│   ├── environment.md          # 环境配置
+│   ├── mvp-guide.md            # MVP 指南
+│   ├── plugin-development.md   # 插件开发
+│   └── conventions.md          # 代码规范
+├── reference/                   # 参考资料
+│   └── competitors.md          # 竞品分析
 ├── components/                  # 模块详细文档
 │   ├── README.md
 │   ├── frontend.md
 │   ├── plugin-system.md
 │   └── quickjs-runtime.md
-└── wiki/                        # 技术文档（旧文档参考）
+└── analysis/                    # 分析报告
+    └── ARCHITECTURE_OPTIMIZATION_REPORT.md
 ```
 
 ---
@@ -60,7 +72,6 @@ docs/
 - 🔌 可扩展插件系统
 - 🛡️ 安全沙箱隔离
 - 🎨 主题定制
-- ⚙️ WASM 原生扩展
 
 ### 技术栈
 
@@ -70,13 +81,10 @@ docs/
 | 前端框架 | Svelte 5 + SvelteKit |
 | 后端语言 | Rust |
 | JS 引擎 | QuickJS |
-| 包管理 | Bun |
 
 ---
 
-## 开发资源
-
-### 快速开始
+## 快速开始
 
 ```bash
 # 安装依赖
@@ -89,43 +97,16 @@ bun run tauri dev
 bun run check
 ```
 
-### 核心模块索引
-
-| 模块 | 文件位置 |
-|------|----------|
-| QuickJS 运行时 | `src-tauri/src/plugins/quickjs_runtime.rs` |
-| 插件加载器 | `src-tauri/src/plugins/loader.rs` |
-| API 桥接 | `src-tauri/src/plugins/api_bridge.rs` |
-| 搜索系统 | `src/lib/stores/search/` |
-| 执行器 | `src/lib/services/executor/` |
-
 ---
 
-## 其他参考
+## 旧文档位置
 
-### 旧文档位置
-
-以下是旧文档位置，仅供参考：
+以下旧文档仅供参考，内容可能已过时：
 
 - `wiki/` - 原始需求规格与架构设计
 - `docs/wiki/` - 部分重复的技术文档
-
-### 竞品分析
-
-- [uTools 插件系统](../wiki/reference/uTools-plugin-system.md)
-- [ZTools 插件系统](../wiki/reference/ZTools-plugin-system.md)
-
----
-
-## 贡献指南
-
-### 文档贡献
-
-如果需要补充或修改文档：
-
-1. 对于核心文档更新，请联系项目维护者
-2. 文档使用 Markdown 格式
-3. 保持与现有文档风格一致
+- `docs/PROJECT_ANALYSIS_REPORT.md` - 已拆分到 architecture/
+- `docs/MVP_DEVELOPMENT_GUIDE.md` - 已拆分到 development/
 
 ---
 
