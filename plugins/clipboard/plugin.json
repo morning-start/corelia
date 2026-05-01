@@ -1,0 +1,23 @@
+{
+  "name": "clipboard",
+  "version": "1.0.0",
+  "type": "quickjs",
+  "logo": "",
+  "prefix": "cb",
+  "description": "剪贴板增强插件，提供剪贴板历史、格式转换等功能",
+  "author": "Corelia Team",
+  "main": "index.js",
+  "patches": [],
+  "features": [
+    {
+      "code": "cbTools",
+      "label": "剪贴板工具",
+      "type": "list",
+      "items": [
+        { "label": "📋 剪贴板历史", "action": "showHistory", "icon": "📋" },
+        { "label": "🔄 格式转换", "action": "formatConvert", "icon": "🔄" },
+        { "label": "🧹 清空剪贴板", "action": "clearClipboard", "icon": "🧹" }
+      ]
+    }
+  ]
+}
