@@ -1,0 +1,22 @@
+{
+  "name": "screenshot",
+  "version": "1.0.0",
+  "type": "quickjs",
+  "logo": "",
+  "prefix": "ss",
+  "description": "截图增强插件，快速截图和处理",
+  "author": "Corelia Team",
+  "main": "index.js",
+  "patches": [],
+  "features": [
+    {
+      "code": "ssTools",
+      "label": "截图工具",
+      "type": "list",
+      "items": [
+        { "label": "📷 区域截图", "action": "areaScreenshot", "icon": "📷" },
+        { "label": "🖥️ 全屏截图", "action": "fullScreenshot", "icon": "🖥️" }
+      ]
+    }
+  ]
+}

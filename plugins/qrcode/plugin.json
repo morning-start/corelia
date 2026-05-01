@@ -1,0 +1,22 @@
+{
+  "name": "qrcode",
+  "version": "1.0.0",
+  "type": "quickjs",
+  "logo": "",
+  "prefix": "qr",
+  "description": "二维码工具插件，生成和解析二维码",
+  "author": "Corelia Team",
+  "main": "index.js",
+  "patches": [],
+  "features": [
+    {
+      "code": "qrTools",
+      "label": "二维码工具",
+      "type": "list",
+      "items": [
+        { "label": "🎨 生成二维码", "action": "generateQR", "icon": "🎨" },
+        { "label": "📷 解析二维码", "action": "parseQR", "icon": "📷" }
+      ]
+    }
+  ]
+}
