@@ -12,6 +12,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { toast } from '$lib/components/Toast.svelte';
 import type { PluginManifest, PluginSearchResult } from './types';
 
 /** 插件动作执行结果 */
@@ -105,10 +106,20 @@ class PluginService {
    */
   async load(id: string): Promise<string> {
     console.log(`[PluginService] 📦 加载插件: ${id}`);
-    const result = await invoke<{ state: string; vm_id?: string }>('load_plugin', { id });
+    try {
+      const result = await invoke<{ state: string; vm_id?: string }>('load_plugin', { id });
 
-    console.log(`[PluginService] ✅ 插件 ${id} 状态: ${result.state}`);
-    return result.state;
+      console.log(`[PluginService] ✅ 插件 ${id} 状态: ${result.state}`);
+      if (result.state === 'ready' || result.state === 'cached') {
+        toast.success(`插件 "${id}" 加载成功`);
+      }
+      return result.state;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[PluginService] ❌ 插件 ${id} 加载失败:`, error);
+      toast.error(`插件 "${id}" 加载失败: ${errorMsg}`);
+      throw error;
+    }
   }
 
   /**

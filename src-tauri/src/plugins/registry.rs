@@ -341,6 +341,219 @@ impl PluginRegistry {
             data.instances.clear();
             println!("[Registry] Registry cleared");
         }
+  }
+}
+
+// ==================== 单元测试 ====================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::loader::{PluginManifest, PluginState, PluginInstance};
+    use std::path::PathBuf;
+
+    fn create_test_manifest(name: &str, prefix: Option<&str>) -> PluginManifest {
+        PluginManifest {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            plugin_type: "quickjs".to_string(),
+            logo: None,
+            prefix: prefix.map(|p| p.to_string()),
+            main: Some("index.js".to_string()),
+            description: Some(format!("Test plugin: {}", name)),
+            author: Some("Test Author".to_string()),
+            patches: Vec::new(),
+            features: None,
+        }
+    }
+
+    fn create_test_instance(name: &str, prefix: Option<&str>) -> PluginInstance {
+        PluginInstance {
+            id: name.to_string(),
+            manifest: create_test_manifest(name, prefix),
+            state: PluginState::MetaLoaded,
+            vm_id: None,
+            plugin_dir: PathBuf::from("/tmp/test"),
+            loaded_at: None,
+            last_used: None,
+            registered_features: Vec::new(),
+            on_ready_callback: None,
+            on_out_callback: None,
+            load_error_count: 0,
+            max_retries: 3,
+            last_error: None,
+            retry_after: None,
+            retry_backoff_ms: 1000,
+        }
+    }
+
+    #[test]
+    fn test_create_registry() {
+        let registry = PluginRegistry::new();
+        assert_eq!(registry.count(), 0);
+    }
+
+    #[test]
+    fn test_register_plugin() {
+        let registry = PluginRegistry::new();
+        let instance = create_test_instance("test-plugin", Some("tp"));
+        
+        let result = registry.register(instance.clone());
+        assert!(result.is_ok());
+        assert_eq!(registry.count(), 1);
+    }
+
+    #[test]
+    fn test_register_duplicate_plugin() {
+        let registry = PluginRegistry::new();
+        let instance = create_test_instance("test-plugin", Some("tp"));
+        
+        registry.register(instance.clone()).unwrap();
+        let result = registry.register(instance);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("已存在"));
+    }
+
+    #[test]
+    fn test_unregister_plugin() {
+        let registry = PluginRegistry::new();
+        let instance = create_test_instance("test-plugin", Some("tp"));
+        
+        registry.register(instance).unwrap();
+        assert_eq!(registry.count(), 1);
+        
+        let result = registry.unregister("test-plugin");
+        assert!(result.is_ok());
+        assert_eq!(registry.count(), 0);
+    }
+
+    #[test]
+    fn test_unregister_nonexistent_plugin() {
+        let registry = PluginRegistry::new();
+        
+        let result = registry.unregister("nonexistent");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("不存在"));
+    }
+
+    #[test]
+    fn test_get_plugin() {
+        let registry = PluginRegistry::new();
+        let instance = create_test_instance("test-plugin", Some("tp"));
+        
+        registry.register(instance.clone()).unwrap();
+        
+        let retrieved = registry.get("test-plugin");
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().manifest.name, "test-plugin");
+    }
+
+    #[test]
+    fn test_search_by_prefix_exact() {
+        let registry = PluginRegistry::new();
+        
+        registry.register(create_test_instance("plugin1", Some("p1"))).unwrap();
+        registry.register(create_test_instance("plugin2", Some("p2"))).unwrap();
+        
+        let results = registry.search_by_prefix("p1");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].manifest.name, "plugin1");
+    }
+
+    #[test]
+    fn test_search_by_prefix_partial() {
+        let registry = PluginRegistry::new();
+        
+        registry.register(create_test_instance("plugin1", Some("test-prefix"))).unwrap();
+        
+        // 支持双向部分匹配
+        let results1 = registry.search_by_prefix("test");
+        assert_eq!(results1.len(), 1);
+        
+        let results2 = registry.search_by_prefix("test-prefix-longer");
+        assert_eq!(results2.len(), 1);
+    }
+
+    #[test]
+    fn test_search_by_prefix_no_match() {
+        let registry = PluginRegistry::new();
+        
+        registry.register(create_test_instance("plugin1", Some("p1"))).unwrap();
+        
+        let results = registry.search_by_prefix("nonexistent");
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_update_state() {
+        let registry = PluginRegistry::new();
+        
+        let mut instance = create_test_instance("test-plugin", Some("tp"));
+        instance.state = PluginState::MetaLoaded;
+        registry.register(instance).unwrap();
+        
+        let result = registry.update_state("test-plugin", PluginState::Ready);
+        assert!(result.is_ok());
+        
+        let updated = registry.get("test-plugin").unwrap();
+        assert!(matches!(updated.state, PluginState::Ready));
+    }
+
+    #[test]
+    fn test_invalid_state_transition() {
+        let registry = PluginRegistry::new();
+        
+        let mut instance = create_test_instance("test-plugin", Some("tp"));
+        instance.state = PluginState::Ready;
+        registry.register(instance).unwrap();
+        
+        // Ready -> MetaLoaded 是无效的转换
+        let result = registry.update_state("test-plugin", PluginState::MetaLoaded);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_active_plugins() {
+        let registry = PluginRegistry::new();
+        
+        let mut instance1 = create_test_instance("plugin1", Some("p1"));
+        instance1.state = PluginState::Ready;
+        registry.register(instance1).unwrap();
+        
+        let mut instance2 = create_test_instance("plugin2", Some("p2"));
+        instance2.state = PluginState::Cached;
+        registry.register(instance2).unwrap();
+        
+        let mut instance3 = create_test_instance("plugin3", Some("p3"));
+        instance3.state = PluginState::Error("test".to_string());
+        registry.register(instance3).unwrap();
+        
+        let active = registry.get_active_plugins();
+        assert_eq!(active.len(), 2);
+    }
+
+    #[test]
+    fn test_list_all() {
+        let registry = PluginRegistry::new();
+        
+        registry.register(create_test_instance("plugin1", Some("p1"))).unwrap();
+        registry.register(create_test_instance("plugin2", Some("p2"))).unwrap();
+        
+        let all = registry.list_all();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn test_clear() {
+        let registry = PluginRegistry::new();
+        
+        registry.register(create_test_instance("plugin1", Some("p1"))).unwrap();
+        registry.register(create_test_instance("plugin2", Some("p2"))).unwrap();
+        
+        assert_eq!(registry.count(), 2);
+        registry.clear();
+        assert_eq!(registry.count(), 0);
     }
 }
 

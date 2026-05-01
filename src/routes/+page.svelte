@@ -17,6 +17,7 @@
   import TitleBar from '$lib/components/TitleBar.svelte';
   import SettingPanel from '$lib/components/SettingPanel.svelte';
   import CategoryTabs from '$lib/components/CategoryTabs.svelte';
+  import Toast, { toast } from '$lib/components/Toast.svelte';
   import '$lib/styles/themes.css';
 
   /** Tauri 主窗口实例 */
@@ -202,12 +203,13 @@
 
     if (result.success) {
       console.log('执行成功:', result.message);
+      toast.success(result.message || '执行成功');
       // 清空搜索词
       searchStore.clearQuery();
       selectedIndex = -1;
     } else {
       console.error('执行失败:', result.message);
-      // 可以在这里添加错误提示 UI
+      toast.error(result.message || '执行失败');
     }
   }
 
@@ -303,3 +305,5 @@
     <SettingPanel onClose={() => showSettings = false} />
   {/if}
 </div>
+
+<Toast />

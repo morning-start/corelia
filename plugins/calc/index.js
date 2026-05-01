@@ -43,13 +43,41 @@ function safeEval(expr) {
       return { error: '计算结果无效' };
     }
 
-    // 格式化输出（避免浮点精度问题）
-    var formatted = Math.abs(result) < 0.0001 || Math.abs(result) > 1e15 ? result.toExponential(6) : parseFloat(result.toPrecision(12));
+    // 修复浮点精度问题
+    var formatted = fixFloatPrecision(result);
 
     return { result: formatted };
   } catch (e) {
     return { error: '表达式错误: ' + e.message };
   }
+}
+
+/**
+ * 修复浮点精度问题
+ * 例如：0.1 + 0.2 = 0.30000000000000004 → 0.3
+ */
+function fixFloatPrecision(num) {
+  // 对于极大或极小的数使用指数表示
+  if (Math.abs(num) < 0.0001 || Math.abs(num) > 1e15) {
+    return Number(num.toExponential(6));
+  }
+
+  // 尝试修复常见的浮点精度问题
+  var epsilon = 1e-10;
+  var rounded = Math.round(num * 1e10) / 1e10;
+  
+  // 如果修复后的结果与原结果非常接近，使用修复后的值
+  if (Math.abs(num - rounded) < epsilon) {
+    // 进一步优化，去除尾随的零
+    var str = rounded.toString();
+    if (str.indexOf('.') !== -1) {
+      str = str.replace(/0+$/, '').replace(/\.$/, '');
+    }
+    return parseFloat(str);
+  }
+
+  // 对于其他情况，使用合理的精度
+  return parseFloat(num.toPrecision(12));
 }
 
 // ==================== 单位换算 ====================
