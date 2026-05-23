@@ -45,7 +45,8 @@
     "tauri-skills": {
       "source": "morning-start/book-skills",
       "sourceType": "github",
-      "computedHash": "3f34a44f8eba168d3a340e97e09d1c2cc2b6d9bdcf0deb42c1e8646a9c134506"
+      "skillPath": "tauri-skills/SKILL.md",
+      "computedHash": "fb3f78fcbc3a77997427946d508506672b150cb15fce51c84e5023e16e75e5c0"
     },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
