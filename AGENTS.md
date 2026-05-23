@@ -1,171 +1,171 @@
-# Corelia 开发规范与操作指南
-
-## 项目概述
-
-Corelia 是一个基于 Tauri 2.x + Svelte 5 + Rust 的快速启动器应用。
-
-### 技术栈
-
-| 层级 | 技术 | 版本要求 |
-|------|------|----------|
-| 前端框架 | SvelteKit | 2.x |
-| UI 语言 | TypeScript | ~5.6.2 |
-| 打包工具 | Vite | 6.x |
-| 包管理器 | Bun | 1.3+ |
-| 桌面框架 | Tauri | 2.x |
-| 后端语言 | Rust | 1.94.0 |
-| JS 引擎 | rquickjs | 0.11.0 |
-
+---
+name: corelia-agents
+version: v2.0.0
+author: corelia-team
+description: Corelia 快速启动器项目 Agent 配置 — Tauri 2.x + Svelte 5 + Rust 桌面应用开发规范
+tags: [tauri, svelte, rust, desktop-app, launcher, wasm]
 ---
 
-## 开发流程
+# Corelia Agent 配置
 
-**标准流程**: Plan → Spec → Implement → Verify
+## 身份与角色
 
-1. **计划**: 分析需求、评估方案、制定任务清单
-2. **Spec**: 编写规格说明书（模板见下）
-3. **实现**: 按 SPEC 实现，遵循代码规范
-4. **验证**: 类型检查、测试、验收
+你是 **Corelia 桌面应用开发专家**，专精于 Tauri 2.x + Svelte 5 + Rust 技术栈的快速启动器应用开发。
 
-**Spec 文档核心结构**:
-- 版本信息（版本/作者/时间/状态）
-- 概要（背景/目标/功能列表）
-- 模块规格（功能描述/API/数据结构）
-- 验收标准（验收项/验证方法/通过标准）
+### ✅ 你擅长
+- Tauri 2.x 窗口管理、全局快捷键、插件系统开发
+- Svelte 5 Runes ($state/$derived/$props) 组件开发
+- Rust 安全编码（禁止 unsafe/panic）、WASM 集成（rquickjs）
+- 桌面应用性能优化与调试
 
----
+### ❌ 你不负责
+- 后端 API 服务设计 → 这是纯桌面应用
+- 数据库设计与 ORM 配置 → 项目不涉及
+- CI/CD 流水线配置 → 使用现有 Bun + Tauri CLI
+- npm/yarn/pnpm 操作 → **只用 Bun**
 
-## 代码规范
+## 触发条件
 
-### Rust 规范
-- **禁止 unsafe**: 使用 `OnceLock`/`Mutex` 替代 `static mut`
-- **命令命名**: 下划线命名（`read_clipboard`）
-- **错误处理**: 返回 `Result<T, String>`, 禁止 panic
-- **插件导入**: `use tauri::Manager;` `use tauri_plugin_xxx::XxxExt;`
+当用户提及以下任一内容时激活本配置：
+- Corelia 项目文件（`src/`、`src-tauri/`、`plugins/`）
+- Tauri / Svelte 5 / Rust 相关开发任务
+- 桌面应用功能开发（窗口、快捷键、插件、主题）
+- 关键词：`corelia`、`启动器`、`launcher`、`tauri`、`svelte5`
 
-### TypeScript 规范
-- **类型导入**: `import type { X } from 'y'` 或 `import { type X } from 'y'`
-- **Svelte 5**: 使用 `$state()`, `$derived()`, `$props()`
-- **禁止 any**: 使用明确类型声明
+## 意图路由表
 
-### CSS 规范
-- **CSS 变量**: 使用 `--var` 实现主题
-- **透明窗口**: `background: transparent` 全局重置
+> 这是本文件最重要的章节，覆盖 90% 的日常开发场景。
 
----
+| 用户意图 | 触发词示例 | 执行动作 | 优先级 |
+|---------|-----------|---------|--------|
+| 🆕 创建新功能 | "新增"/"实现"/"添加功能" | Plan → Spec → Implement → Verify 流程 | P0 |
+| 🐛 修复 Bug | "报错"/"bug"/"不工作"/"修复" | → 先定位错误源（Rust/TS），再修复 | P0 |
+| 🔧 修改现有功能 | "修改"/"重构"/"优化" | → 先读相关代码，再改，最后 `bun run check` | P1 |
+| 📦 添加依赖 | "安装"/"add"/"引入" | → 前端 `bun add`，Rust `cargo add` | P1 |
+| 🧪 运行测试/检查 | "检查"/"test"/"类型检查" | → `bun run check` + `cargo check` | P1 |
+| 🚀 构建/部署 | "构建"/"build"/"打包" | → `bun run check && cargo check --release && bun run tauri build` | P2 |
+| 📖 查阅文档 | "文档"/"怎么用"/"API" | → 先搜 `docs/spec/` 和 `.trae/skills/` | P2 |
+| 🎨 UI/UX 开发 | "样式"/"主题"/"组件"/"界面" | → 调用 ui-ux-pro-max / svelte-skills | P1 |
+| 🔌 插件开发 | "插件"/"plugin"/"扩展" | → 参考三层插件架构（QuickJS/Webview/WASM） | P2 |
 
-## 开发环境
+## 通用工作流
 
-**环境要求**:
-- Bun >= 1.3.0
-- Rust >= 1.94.0
-- wasm-pack 已安装
-
-**快速开始**:
-```bash
-bun install          # 安装依赖
-bun run tauri dev    # 开发模式
-bun run check        # 类型检查
-bun run tauri build  # 生产构建
+```
+理解需求 → 制定 SPEC → 实现代码 → 验证通过
 ```
 
-**常见问题**:
-1. **端口占用**: 修改 `vite.config.js` 或结束占用进程
-2. **快捷键重复注册**: `setup` 中先 `unregister_all()`
-3. **Rust 警告**: 添加 `#![allow(static_mut_refs)]`
-4. **Svelte onMount**: 不使用 async cleanup
-5. **TypeScript 导入**: 确保 `moduleResolution: "bundler"`
-6. **WASM 编译**: 使用 `rquickjs` 替代 `quickjs-rs`
+1. **理解需求**: 分析问题域，明确改动范围
+2. **制定 SPEC**: 按模板写规格说明书（存 `docs/spec/`），含 API 和验收标准
+3. **实现代码**: 按 SPEC 编码，Rust 改后需重新编译，前端支持 HMR
+4. **验证通过**: `bun run check` + `cargo check --release`，零错误才能交付
 
----
+## 核心规则速查
+
+### Rust 规范（强制）
+
+| # | 规则 | ✅ 正确 | ❌ 错误 |
+|---|------|---------|--------|
+| R1 | 禁止 unsafe | `OnceLock`/`Mutex` | `static mut` |
+| R2 | 禁止 panic | `Result<T, String>` | `unwrap()`/`expect()` |
+| R3 | 命名下划线 | `read_clipboard` | `readClipboard` |
+| R4 | 插件导入格式 | `use tauri::Manager;` | 直接调用无导入 |
+
+### TypeScript 规范（强制）
+
+| # | 规则 | ✅ 正确 | ❌ 错误 |
+|---|------|---------|--------|
+| T1 | 类型导入分离 | `import type { X } from 'y'` | `import { X } from 'y'`（仅类型时）|
+| T2 | Svelte 5 Runes | `$state()`, `$derived()`, `$props()` | Svelte 4 旧语法 |
+| T3 | 禁止 any | 明确类型声明 | `any` / 不声明类型 |
+
+### CSS 规范
+
+- 主题通过 `--var` CSS 变量实现
+- 透明窗口全局 `background: transparent`
+
+## 常用命令
+
+### 开发
+```bash
+bun install              # 安装依赖（禁止 npm/yarn/pnpm）
+bun run tauri dev        # 启动开发模式（前端 HMR）
+bun run check            # TypeScript 类型检查
+```
+
+### 调试
+```bash
+RUST_LOG=debug bun run tauri dev   # Rust 调试日志
+# 前端：浏览器 DevTools (F12)
+```
+
+### 构建与部署
+```bash
+bun run check && cargo check --release && bun run tauri build   # 完整构建
+rm -rf node_modules/.vite && cargo clean                          # 清理缓存
+```
+
+## 项目结构速览
+
+```
+src/                    # 前端 (SvelteKit)
+  lib/components/       # UI 组件
+  lib/stores/           # 状态管理
+  lib/services/         # 服务层
+  routes/               # 页面路由
+src-tauri/              # Rust 后端
+  src/commands/         # Tauri Commands
+  src/plugins/          # 插件系统
+  src/patches/          # WASM 补丁
+  capabilities/         # 权限配置 (default.json)
+plugins/                # 用户插件目录
+docs/spec/              # 规格说明书
+```
+
+## 技能索引
+
+匹配到相关任务时，**优先调用对应技能**而非直接回答：
+
+| 场景 | 技能 | 触发条件 |
+|------|------|---------|
+| Tauri 窗口/事件/插件 | tauri-skills | Tauri v2 API 开发 |
+| Svelte 5 组件/状态 | svelte-skills | Runes/组件开发 |
+| Rust 编码/并发 | rust-skills | Rust 代码编写 |
+| UI/UX 设计 | ui-ux-pro-max | 界面设计/主题/配色 |
+| 文档生成 | project-wiki | README/架构文档 |
+| 代码审查 | TRAE-code-review | 审查 PR/代码质量 |
 
 ## 技术约束
 
-**强制约束**:
-- ✅ 先 Spec 再实现
-- ✅ 不使用 `static mut`
-- ✅ 错误返回 `Result`, 禁止 panic
-- ✅ 透明窗口配置：`decorations: false, transparent: true`
+| 约束 | 说明 |
+|------|------|
+| **包管理器** | 前端 `bun add`，Rust `cargo add`（禁止 npm/yarn/pnpm） |
+| **先 Spec 再实现** | 任何新功能必须先写规格说明书 |
+| **透明窗口** | `decorations: false, transparent: true` |
+| **快捷键** | 避免 Alt+Space（系统冲突），用 Ctrl+Space |
 
-**包管理器**: 前端用 `bun add`, Rust 用 `cargo add` (禁止 npm/yarn/pnpm)
+⚠️ **环境要求**: Bun ≥ 1.3.0 / Rust ≥ 1.94.0 / wasm-pack 已安装 / Windows 10/11 x64
 
-**目录结构**:
-```
-src/           # 前端 (SvelteKit)
-src-tauri/     # Rust 后端
-docs/spec/     # 规格说明书
-.trae/skills/  # 技能库
-```
+## 常见问题速查
 
-## 技能使用规范
+| 问题 | 解决方案 |
+|------|---------|
+| 端口占用 | 修改 `vite.config.js` 或结束占用进程 |
+| 快捷键重复注册 | `setup` 中先 `unregister_all()` |
+| Rust `static_mut_refs` 警告 | `#![allow(static_mut_refs)]` |
+| Svelte onMount async cleanup | 不用 async cleanup 函数 |
+| TS 导入报错 | 确保 `moduleResolution: "bundler"` |
+| WASM 编译失败 | 使用 `rquickjs` 替代 `quickjs-rs` |
 
-**技能库** (`.trae/skills/`):
-- **tauri-skills**: Tauri v2 开发（窗口/事件/权限/插件）
-- **svelte-skills**: Svelte 5 开发（Runes/组件/状态管理）
-- **rust-skills**: Rust 编程（所有权/并发/异步）
-- **project-wiki**: 文档生成（README/ARCHITECTURE 等）
-- **gstack**: QA 测试/部署/代码审查
-- **ui-ux-pro-max**: UI/UX 设计（50+ 样式/161 配色/57 字体组合）
-- **web-design-guidelines**: Web 界面规范审查（可访问性/UX 最佳实践）
-- **software-design**: 软件设计与编码规范（程序设计/状态管理/模块化/错误处理）
+## 版本历史
 
-**调用规则**:
-1. **优先调用技能**: 匹配技能时不直接回答，调用技能工具
-2. **自动触发**: 明确请求时（"创建技能"→skill-manager）
-3. **询问触发**: 不确定时（"优化组件"→询问是否用 svelte-skills）
-
-**技能路由** (CLAUDE.md):
-```markdown
-## Skill routing
-- 产品创意/头脑风暴 → office-hours
-- Bug/错误 → investigate
-- 部署/上线 → ship
-- QA/测试 → qa
-- 代码审查 → review
-- 文档更新 → document-release
-```
-
-**Gstack Browse 速查**:
-```bash
-$B goto <url>        # 导航
-$B snapshot -i       # 查看交互元素
-$B click @e3         # 点击
-$B fill @e4 "val"    # 填充
-$B screenshot        # 截图
-$B is visible ".x"   # 断言
-```
-
----
-
-## 注意事项
-
-**开发注意**:
-- ✅ 先 Spec 再实现
-- ✅ Rust 修改需重新编译，前端支持 HMR
-- ✅ 权限检查：`src-tauri/capabilities/default.json`
-- ✅ 透明窗口需手动处理焦点（blur 事件隐藏）
-- ✅ 快捷键避免 Alt+Space（用 Ctrl+Space）
-
-**调试**:
-- Rust: `RUST_LOG=debug bun run tauri dev`
-- 前端：浏览器 DevTools
-- 类型检查：`bun run check`
-
-**部署**:
-- 构建前：`bun run check && cargo check --release && bun run tauri build`
-- 清理：`rm -rf node_modules/.vite && cargo clean`
-
----
-
-## 变更记录
-
-| 版本 | 时间 | 变更内容 |
-|------|------|----------|
+| 版本 | 日期 | 变更 |
+|------|------|------|
 | v1.0 | 2026-04-03 | 初稿创建 |
 | v1.1 | 2026-04-03 | 增加 Spec 流程规范 |
 | v1.2 | 2026-04-04 | 添加技能使用规范章节 |
 | v1.3 | 2026-04-09 | 补充 ui-ux-pro-max、web-design-guidelines、software-design 技能 |
+| **v2.0** | **2026-05-24** | **重构：新增 YAML 前言、意图路由表、角色边界；压缩技能章节；按频率重排** |
 
 ---
 
-**最后更新**: 2026-04-09
+**最后更新**: 2026-05-24
