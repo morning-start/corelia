@@ -123,6 +123,8 @@ Corelia 采用三层插件架构：
 - [项目路线图](wiki/ROADMAP.md)
 - [问题讨论记录](wiki/problem/)
 
+完整文档请查看 [文档索引](./docs)
+
 ## 路线图
 
 - [x] MVP 架构设计

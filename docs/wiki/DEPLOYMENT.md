@@ -1,18 +1,11 @@
 # 构建与部署
 
-> Corelia 的生产构建、打包分发与发布流程。
+> Corelia 的生产构建与故障排查。代码签名、自动更新等功能将在 Beta 阶段补充。
 
 ## 构建前检查
 
 ```bash
-# 前端类型检查
-bun run check
-
-# Rust 编译检查
-cd src-tauri && cargo check --release
-
-# 一键检查 + 构建
-bun run check && cargo check --release && bun run tauri build
+bun run check && cargo check --release
 ```
 
 ## 生产构建
@@ -21,45 +14,11 @@ bun run check && cargo check --release && bun run tauri build
 bun run tauri build
 ```
 
-构建产物位置：
+构建产物位于 `src-tauri/target/release/bundle/msi/`（`.msi` 安装包）。
 
-| 平台 | 产物路径 | 格式 |
-|------|----------|------|
-| Windows | `src-tauri/target/release/bundle/msi/` | `.msi` 安装包 |
-| Windows | `src-tauri/target/release/bundle/nsis/` | `.exe` 安装包 |
-| macOS | `src-tauri/target/release/bundle/dmg/` | `.dmg` 镜像 |
-| Linux | `src-tauri/target/release/bundle/deb/` | `.deb` 包 |
-| Linux | `src-tauri/target/release/bundle/appimage/` | `.AppImage` |
+## 关键配置
 
-## 构建配置
-
-### Tauri 配置 (`tauri.conf.json`)
-
-关键构建相关字段：
-
-```json
-{
-  "version": "0.1.0",
-  "identifier": "com.corelia.app",
-  "build": {
-    "beforeBuildCommand": "bun run build",
-    "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:1420",
-    "frontendDist": "../build"
-  },
-  "bundle": {
-    "active": true,
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
-    "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": ""
-    }
-  }
-}
-```
-
-### 窗口配置
+### 窗口配置 (`tauri.conf.json`)
 
 ```json
 {
@@ -82,8 +41,6 @@ bun run tauri build
 ```
 
 ### 权限配置 (`capabilities/default.json`)
-
-确保构建前权限声明完整：
 
 ```json
 {
@@ -108,110 +65,12 @@ bun run tauri build
 ## 清理与重置
 
 ```bash
-# 清理 Vite 缓存
-rm -rf node_modules/.vite
-
-# 清理 Rust 编译缓存
-cd src-tauri && cargo clean
-
-# 完全重置
-rm -rf node_modules bun.lock
+rm -rf node_modules/.vite              # 清理 Vite 缓存
+cd src-tauri && cargo clean            # 清理 Rust 编译缓存
+rm -rf node_modules bun.lock           # 完全重置
 rm -rf src-tauri/target
 bun install
 ```
-
-## 代码签名
-
-### Windows
-
-1. 获取代码签名证书（.pfx 文件）
-2. 配置 `tauri.conf.json`：
-
-```json
-{
-  "bundle": {
-    "windows": {
-      "certificateThumbprint": "YOUR_THUMBPRINT",
-      "digestAlgorithm": "sha256",
-      "timestampUrl": "http://timestamp.digicert.com"
-    }
-  }
-}
-```
-
-3. 构建时签名：
-
-```bash
-TAURI_SIGNING_PRIVATE_KEY=path/to/key.pem bun run tauri build
-```
-
-### macOS
-
-```bash
-# Apple Developer 证书签名
-export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAM_ID)"
-bun run tauri build
-```
-
-## 自动更新
-
-Tauri 支持自动更新功能，配置步骤：
-
-1. 在 `Cargo.toml` 添加依赖：
-
-```toml
-[dependencies]
-tauri-plugin-updater = "2"
-```
-
-2. 在 `lib.rs` 注册插件：
-
-```rust
-.plugin(tauri_plugin_updater::Builder::new().build())
-```
-
-3. 配置更新服务器 URL 在 `tauri.conf.json`
-
-## 版本发布流程
-
-```
-1. 更新版本号
-   ├── package.json: "version": "x.y.z"
-   ├── src-tauri/Cargo.toml: version = "x.y.z"
-   └── src-tauri/tauri.conf.json: "version": "x.y.z"
-
-2. 更新 CHANGELOG.md
-
-3. 构建与测试
-   └── bun run check && cargo check --release && bun run tauri build
-
-4. 打 tag
-   └── git tag vx.y.z
-
-5. 上传构建产物到发布平台
-```
-
-## 性能优化
-
-### 减小包体积
-
-- **前端**：Vite 自动 tree-shaking，确保未使用代码被移除
-- **Rust**：`cargo check --release` 自动优化
-- **WASM**：使用 `wasm-opt` 进一步优化
-
-```bash
-# 安装 wasm-opt
-cargo install wasm-opt
-
-# 优化 WASM 文件
-wasm-opt -Oz -o output.wasm input.wasm
-```
-
-### 启动速度
-
-- 插件懒加载（仅 `scan_plugins` 扫描元数据，按需 `load_plugin`）
-- QuickJS VM 池化（避免重复创建/销毁开销）
-- 闲置 VM 自动回收（5 分钟超时）
 
 ## 故障排查
 

@@ -11,6 +11,12 @@
       "sourceType": "github",
       "computedHash": "4869f45e6ea8d06fa2059b85f2341a01c44a34f72a497692c5ec79dbf734e346"
     },
+    "hermes-agent-config": {
+      "source": "morning-start/book-skills",
+      "sourceType": "github",
+      "skillPath": "agent-skill/SKILL.md",
+      "computedHash": "579834fe368ff8a5bf0f7ec508ed9dd0a09ee6b8da85fe5c1a195923a14fc176"
+    },
     "project-wiki": {
       "source": "morning-start/wiki-skills",
       "sourceType": "github",

@@ -127,14 +127,14 @@ Phase 3 (v1.0):    Windows + macOS + Linux (Ubuntu 22.04+, Fedora 39+)
 
 ## 附录：历史决策锚点
 
-| 日期 | 决策 | 来源文档 |
-|------|------|----------|
-| 2026-03 | MVP 边界：8 插件 + WASM 包含 | [SRS](../wiki/SRS.md) |
-| 2026-03 | API 兼容策略：兼容 uTools + 扩展 Corelia | [SRS](../wiki/SRS.md) |
-| 2026-03 | 快捷键方案：可自定义 + 首次冲突检测 | [SRS](../wiki/SRS.md) |
-| 2026-03 | 主题系统：CSS 变量 + 3 内置主题 | [SRS](../wiki/SRS.md) |
-| 2026-04 | 配置分层：System / User / App 三层 | [SYSTEM-CONFIG](../wiki/SYSTEM-CONFIG.md) |
-| 2026-04 | 插件状态机：MetaLoaded → Loading → Ready → Cached → Unloaded | [ARCHITECTURE](../wiki/ARCHITECTURE.md) |
+| 日期 | 决策 | 来源 |
+|------|------|------|
+| 2026-03 | MVP 边界：8 插件 + WASM 包含 | MVP 规划阶段 |
+| 2026-03 | API 兼容策略：兼容 uTools + 扩展 Corelia | MVP 规划阶段 |
+| 2026-03 | 快捷键方案：可自定义 + 首次冲突检测 | MVP 规划阶段 |
+| 2026-03 | 主题系统：CSS 变量 + 3 内置主题 | MVP 规划阶段 |
+| 2026-04 | 配置分层：System / User / App 三层 | 架构设计阶段 |
+| 2026-04 | 插件状态机：MetaLoaded → Loading → Ready → Cached → Unloaded | [ARCHITECTURE](wiki/ARCHITECTURE.md) |
 
 ---
 
