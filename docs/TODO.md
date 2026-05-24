@@ -156,10 +156,9 @@
 
 ## 下一步行动（本周）
 
-1. **实现** 配置重置功能（`user.ts` 一键恢复默认值）
-2. **开始** QuickJS `unsafe impl Send/Sync` 移除方案设计
-3. **补充** `registry.rs` 核心函数的单元测试
-4. **启动** `plugins/mod.rs` 模块化整理（统一 api_bridge/loader 的模块导出模式）
+1. **开始** QuickJS `unsafe impl Send/Sync` 移除方案设计
+2. **补充** `registry.rs` 核心函数的单元测试
+3. **启动** `plugins/mod.rs` 模块化整理（统一 api_bridge/loader 的模块导出模式）
 
 ---
 
