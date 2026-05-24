@@ -25,7 +25,7 @@
 
 | 任务 | 状态 | 优先级 | 影响 | 关联文件 |
 |------|:----:|:------:|:----:|----------|
-| QuickJS `unsafe impl Send/Sync` 移除（当前6处：quickjs_runtime.rs 4处 + loader/mod.rs 2处） | 🔄 | P0 | 安全性↑↑ | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs), [`loader/mod.rs`](src-tauri/src/plugins/loader/mod.rs) |
+| QuickJS `unsafe impl Send/Sync` 移除（已执行方案：6处→2处，仅VmCore保留2行有文档的unsafe） | ✅ | P0 | 安全性↑↑ | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs), [`loader/mod.rs`](src-tauri/src/plugins/loader/mod.rs) |
 | 多线程 VM 支持 | ⬜ | P1 | 性能↑↑ | [`quickjs_runtime.rs`](src-tauri/src/plugins/quickjs_runtime.rs) |
 | WASM Promise 异步支持（替代轮询方案） | ⬜ | P1 | 性能↑↑ | [`wasm_bridge.rs`](src-tauri/src/plugins/wasm_bridge.rs), [`api_bridge.rs`](src-tauri/src/plugins/api_bridge.rs) |
 | 插件热重载 | ⬜ | P2 | 开发体验↑ | 新增模块 |
@@ -156,9 +156,8 @@
 
 ## 下一步行动（本周）
 
-1. **实现** QuickJS `unsafe impl Send/Sync` 移除（按 [`UNSAFE_REMOVAL_PLAN.md`](report/UNSAFE_REMOVAL_PLAN.md) 分5步执行）
-2. **补充** `registry.rs` 核心函数的单元测试
-3. **启动** `plugins/mod.rs` 模块化整理（统一 api_bridge/loader 的模块导出模式）
+1. **补充** `registry.rs` 核心函数的单元测试
+2. **启动** `plugins/mod.rs` 模块化整理（统一 api_bridge/loader 的模块导出模式）
 
 ---
 

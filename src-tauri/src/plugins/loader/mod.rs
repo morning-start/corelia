@@ -22,9 +22,6 @@ pub struct PluginLoader {
     pub(crate) quickjs_runtime: Arc<QuickJSRuntime>,
 }
 
-unsafe impl Send for PluginLoader {}
-unsafe impl Sync for PluginLoader {}
-
 impl PluginLoader {
     pub fn new(plugins_dir: PathBuf, runtime: Arc<QuickJSRuntime>) -> Self {
         Self {
