@@ -4,12 +4,26 @@ use crate::plugins::loader::PluginLoader;
 
 impl PluginLoader {
     /// 扫描所有插件（仅加载元数据，懒加载策略）
+    ///
+    /// 使用目录修改时间（mtime）缓存：如果目录未变更，直接返回上次结果。
     pub fn scan_plugins(&mut self) -> Result<Vec<String>, String> {
         if !self.plugins_dir.exists() {
             return Err(format!("插件目录不存在: {}", self.plugins_dir.display()));
         }
         if !self.plugins_dir.is_dir() {
             return Err(format!("插件路径不是目录: {}", self.plugins_dir.display()));
+        }
+
+        // 检查目录 mtime 缓存
+        let current_mtime = std::fs::metadata(&self.plugins_dir)
+            .ok()
+            .and_then(|meta| meta.modified().ok());
+
+        if let (Some(cached_time), Some(current_time)) = (self.last_scan_mtime, current_mtime) {
+            if cached_time == current_time && !self.last_discovered_ids.is_empty() {
+                println!("[PluginLoader] 插件目录未变更，使用缓存 ({} 个插件)", self.last_discovered_ids.len());
+                return Ok(self.last_discovered_ids.clone());
+            }
         }
 
         let entries = std::fs::read_dir(&self.plugins_dir)
@@ -60,6 +74,10 @@ impl PluginLoader {
                 }
             }
         }
+
+        // 更新缓存
+        self.last_scan_mtime = current_mtime;
+        self.last_discovered_ids = discovered_ids.clone();
 
         Ok(discovered_ids)
     }

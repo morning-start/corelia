@@ -1,5 +1,6 @@
 import { writable, derived, type Readable, type Writable } from 'svelte/store';
-import { search } from '$lib/search/fuzzy';
+import { pinyin } from 'pinyin-pro';
+import { search, buildSearchIndex, type SearchItem } from '$lib/search/fuzzy';
 import { createSystemItems, type ExecutableItem } from '$lib/services/executor';
 
 export class SystemSearchProvider {
@@ -7,7 +8,8 @@ export class SystemSearchProvider {
   systemResults: Readable<any[]>;
 
   constructor(query: Readable<string>) {
-    this.items = writable<ExecutableItem[]>(createSystemItems());
+    const rawItems = createSystemItems();
+    this.items = writable<ExecutableItem[]>(buildSearchIndex(rawItems));
 
     this.systemResults = derived(
       [query, this.items],
@@ -19,7 +21,7 @@ export class SystemSearchProvider {
   }
 
   addItem(item: ExecutableItem) {
-    this.items.update(items => [...items, item]);
+    this.items.update(items => [...items, { ...item, searchText: buildSearchText(item) }]);
   }
 
   removeItem(id: string) {
@@ -27,6 +29,12 @@ export class SystemSearchProvider {
   }
 
   resetToDefaults() {
-    this.items.set(createSystemItems());
+    this.items.set(buildSearchIndex(createSystemItems()));
   }
+}
+
+function buildSearchText(item: Pick<SearchItem, 'name' | 'description'>): string {
+  const namePinyin = pinyin(item.name, { toneType: 'none' }).replace(/\s+/g, '');
+  const descPinyin = pinyin(item.description, { toneType: 'none' }).replace(/\s+/g, '');
+  return `${item.name} ${namePinyin} ${item.description} ${descPinyin}`;
 }

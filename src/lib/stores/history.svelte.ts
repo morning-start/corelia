@@ -73,7 +73,17 @@ function add(query: string) {
   historyState = { ...historyState, items: newItems };
   notify();
 
-  api.store.save('search_history', newItems).catch(console.error);
+  scheduleSave(newItems);
+}
+
+let writeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleSave(items: HistoryItem[]) {
+  if (writeTimer) clearTimeout(writeTimer);
+  writeTimer = setTimeout(() => {
+    api.store.save('search_history', items).catch(console.error);
+    writeTimer = null;
+  }, 2000);
 }
 
 async function clear() {

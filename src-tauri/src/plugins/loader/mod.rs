@@ -20,6 +20,10 @@ pub struct PluginLoader {
     pub(crate) plugins_dir: PathBuf,
     pub(crate) instances: HashMap<String, types::PluginInstance>,
     pub(crate) quickjs_runtime: Arc<QuickJSRuntime>,
+    /// 上次扫描时的目录修改时间，用于 IO 缓存
+    last_scan_mtime: Option<std::time::SystemTime>,
+    /// 上次扫描发现的插件 ID 列表缓存
+    last_discovered_ids: Vec<String>,
 }
 
 impl PluginLoader {
@@ -28,6 +32,8 @@ impl PluginLoader {
             plugins_dir,
             instances: HashMap::new(),
             quickjs_runtime: runtime,
+            last_scan_mtime: None,
+            last_discovered_ids: Vec::new(),
         }
     }
 

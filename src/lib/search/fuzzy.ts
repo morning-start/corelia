@@ -6,6 +6,8 @@ export interface SearchItem {
   name: string;
   description: string;
   category: string;
+  /** 预计算的搜索文本（含拼音），构建时填充 */
+  searchText?: string;
 }
 
 /** 判断字符串是否包含中文字符 */
@@ -19,7 +21,7 @@ const pinyinCache = new Map<string, string>();
 /** 获取字符串的拼音（带缓存） */
 function getPinyin(str: string): string {
   if (!containsChinese(str)) {
-    return str; // 无中文，直接返回原字符串
+    return str;
   }
   const cached = pinyinCache.get(str);
   if (cached) return cached;
@@ -28,16 +30,29 @@ function getPinyin(str: string): string {
   return result;
 }
 
+/** 预计算单个项目的搜索文本 */
+function buildItemSearchText(item: Pick<SearchItem, 'name' | 'description'>): string {
+  const namePinyin = getPinyin(item.name);
+  const descPinyin = getPinyin(item.description);
+  return `${item.name} ${namePinyin} ${item.description} ${descPinyin}`;
+}
+
+/** 批量预计算搜索引擎索引 */
+export function buildSearchIndex<T extends SearchItem>(items: T[]): T[] {
+  return items.map(item => ({
+    ...item,
+    searchText: buildItemSearchText(item),
+  })) as T[];
+}
+
 export function search(query: string, items: SearchItem[]): FilterResult<SearchItem>[] {
-  // 如果查询词不含中文，跳过拼音转换
   const queryHasChinese = containsChinese(query);
   const queryPinyin = queryHasChinese ? getPinyin(query) : query;
 
   return filter(query, items, {
     extract: (item) => {
-      const namePinyin = getPinyin(item.name);
-      const descPinyin = getPinyin(item.description);
-      return `${item.name} ${namePinyin} ${item.description} ${descPinyin}`;
+      if (item.searchText) return item.searchText;
+      return buildItemSearchText(item);
     },
   });
 }
