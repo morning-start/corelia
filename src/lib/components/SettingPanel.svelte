@@ -116,13 +116,8 @@
     showResetConfirm = false;
     try {
       await user.reset();
-      userConfig = $user;
-      // 恢复当前显示值
-      if (userConfig.theme) {
-        theme.set(userConfig.theme);
-      }
-      // 重新获取开机启动状态
-      startupEnabled = await startupService.isEnabled();
+      userConfig = { ...$user };
+      theme.set(userConfig.theme ?? 'system');
     } catch (e) {
       console.error('Failed to reset config:', e);
     }

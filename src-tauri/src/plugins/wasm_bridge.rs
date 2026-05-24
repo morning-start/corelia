@@ -1,7 +1,7 @@
 // WASM 桥接模块
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::Emitter;
@@ -41,8 +41,8 @@ pub struct WasmCallResultEntry {
 pub struct WasmBridge {
     /// 已注册的 WASM 函数：func_name -> WasmFunctionInfo
     functions: HashMap<String, WasmFunctionInfo>,
-    /// 已加载的 patch 列表：patch_name -> patch_dir_path
-    loaded_patches: HashMap<String, String>,
+    /// 已加载的 patch 列表：patch_name
+    loaded_patches: HashSet<String>,
     /// WASM 调用结果缓存：request_id -> result
     call_results: HashMap<String, WasmCallResultEntry>,
 }
@@ -51,7 +51,7 @@ impl WasmBridge {
     pub fn new() -> Self {
         Self {
             functions: HashMap::new(),
-            loaded_patches: HashMap::new(),
+            loaded_patches: HashSet::new(),
             call_results: HashMap::new(),
         }
     }
@@ -67,7 +67,7 @@ impl WasmBridge {
             self.functions.insert(func.name.clone(), func);
         }
 
-        self.loaded_patches.insert(patch.clone(), String::new());
+        self.loaded_patches.insert(patch.clone());
         println!("[WasmBridge] patch '{}' 注册完成，共 {} 个函数", patch, count);
     }
 
@@ -95,7 +95,7 @@ impl WasmBridge {
 
     /// 检查 patch 是否已加载
     pub fn is_patch_loaded(&self, patch: &str) -> bool {
-        self.loaded_patches.contains_key(patch)
+        self.loaded_patches.contains(patch)
     }
 
     /// 存储 WASM 调用结果（由前端通过 Tauri command 写入）
