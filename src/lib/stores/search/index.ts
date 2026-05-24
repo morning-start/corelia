@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { search, type SearchItem } from '$lib/search/fuzzy';
 import type { ExecutableItem } from '$lib/services/executor';
 import { SystemSearchProvider } from './system';
@@ -15,19 +15,27 @@ class SearchStore {
   pluginHandler: PluginSearchHandler;
   merger: SearchResultMerger;
 
+  private queryUnsubscribe: () => void;
+  private systemResultsUnsubscribe: () => void;
+  private pluginSearchPending = false;
+
   constructor() {
     this.systemProvider = new SystemSearchProvider(this.query);
     this.pluginHandler = new PluginSearchHandler();
     this.merger = new SearchResultMerger();
 
-    this.query.subscribe($query => {
+    this.queryUnsubscribe = this.query.subscribe($query => {
+      this.pluginSearchPending = true;
       this.pluginHandler.search($query, () => {
+        this.pluginSearchPending = false;
         this.mergeResults();
       });
     });
 
-    this.systemProvider.systemResults.subscribe(() => {
-      this.mergeResults();
+    this.systemResultsUnsubscribe = this.systemProvider.systemResults.subscribe(() => {
+      if (!this.pluginSearchPending) {
+        this.mergeResults();
+      }
     });
   }
 
@@ -66,8 +74,7 @@ class SearchStore {
   }
 
   async refreshPluginResults(): Promise<number> {
-    let currentQuery: string = '';
-    this.query.subscribe(v => currentQuery = v)();
+    const currentQuery = get(this.query);
     this.pluginHandler.search(currentQuery, () => {
       this.mergeResults();
     });
@@ -75,9 +82,14 @@ class SearchStore {
   }
 
   private mergeResults(): void {
-    let currentSystemResults: any[] = [];
-    this.systemProvider.systemResults.subscribe(v => currentSystemResults = v)();
-    this.merger.merge(currentSystemResults, this.pluginHandler.pluginResults);
+    const systemResults = get(this.systemProvider.systemResults);
+    this.merger.merge(systemResults, this.pluginHandler.pluginResults);
+  }
+
+  destroy(): void {
+    this.queryUnsubscribe();
+    this.systemResultsUnsubscribe();
+    this.pluginHandler.cancel();
   }
 }
 
