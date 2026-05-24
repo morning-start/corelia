@@ -100,6 +100,26 @@
       await system.load();
     }
   }
+
+  /** 是否显示重置确认弹窗 */
+  let showResetConfirm = $state(false);
+
+  /** 重置所有用户配置 */
+  async function handleResetConfig() {
+    showResetConfirm = false;
+    try {
+      await user.reset();
+      userConfig = $user;
+      // 恢复当前显示值
+      if (userConfig.theme) {
+        theme.set(userConfig.theme);
+      }
+      // 重新获取开机启动状态
+      startupEnabled = await startupService.isEnabled();
+    } catch (e) {
+      console.error('Failed to reset config:', e);
+    }
+  }
 </script>
 
 <div class="setting-panel">
@@ -190,6 +210,16 @@
           />
         </div>
       </section>
+
+      <section class="setting-section">
+        <h3>重置</h3>
+        <div class="setting-item">
+          <span class="setting-label danger-label">恢复默认设置</span>
+          <button class="reset-btn" onclick={() => showResetConfirm = true}>
+            重置
+          </button>
+        </div>
+      </section>
     </div>
   {/if}
 
@@ -200,6 +230,26 @@
     </div>
   {/if}
 </div>
+
+<!-- 重置确认弹窗 -->
+{#if showResetConfirm}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="modal-overlay" onclick={() => showResetConfirm = false} onkeydown={(e) => { if (e.key === 'Escape') showResetConfirm = false; }} role="presentation">
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="modal-dialog" onclick={(e) => e.stopPropagation()} tabindex="-1" role="alertdialog" aria-label="确认重置">
+      <div class="modal-header">
+        <h3>确认重置</h3>
+      </div>
+      <p class="modal-body">
+        此操作将重置所有配置为默认值，包括主题、快捷键和行为设置。此操作不可撤销。
+      </p>
+      <div class="modal-footer">
+        <button class="cancel-btn" onclick={() => showResetConfirm = false}>取消</button>
+        <button class="confirm-reset-btn" onclick={handleResetConfig}>确认重置</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .setting-panel {
@@ -362,5 +412,105 @@
   input[type="checkbox"]:checked::before {
     left: 22px;
     background: white;
+  }
+
+  .danger-label {
+    color: var(--danger-color, #e74c3c);
+  }
+
+  .reset-btn {
+    display: flex;
+    align-items: center;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--danger-color, #e74c3c);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--danger-color, #e74c3c);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .reset-btn:hover {
+    background: var(--danger-color, #e74c3c);
+    color: white;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 100;
+  }
+
+  .modal-dialog {
+    width: 320px;
+    background: var(--bg-primary);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+  }
+
+  .modal-header {
+    padding: 20px 20px 0;
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-color);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .modal-body {
+    padding: 12px 20px;
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 20px;
+  }
+
+  .cancel-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .cancel-btn:hover {
+    background: var(--bg-hover);
+  }
+
+  .confirm-reset-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    background: var(--danger-color, #e74c3c);
+    color: white;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .confirm-reset-btn:hover {
+    opacity: 0.85;
   }
 </style>
