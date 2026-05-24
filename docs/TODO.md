@@ -17,9 +17,9 @@
 |------|:----:|:------:|:----:|----------|
 | `api_bridge.rs` 模块化拆分（已拆分为 15 个子模块：shared/storage/clipboard/shell/window/path/notification/fs/callbacks/fetch/dialog/process/context/wasm + mod.rs） | ✅ | P0 | 可维护性↑ | [`api_bridge/`](src-tauri/src/plugins/api_bridge/) |
 | `loader.rs` 模块化拆分（已拆分为 7 个子模块：types/scanner/lifecycle/query/cleanup/commands + mod.rs） | ✅ | P1 | 可维护性↑ | [`loader/`](src-tauri/src/plugins/loader/) |
-| 搜索 Store 解耦重构（拆分为system/plugin/merger独立模块） | ⬜ | P1 | 可测试性↑ | [`search.ts`](src/lib/stores/search.ts) |
-| `executor` 服务拆分（职责过重，拆为system/setting/plugin） | ⬜ | P2 | 可维护性↑ | [`executor.ts`](src/lib/services/executor.ts) |
-| Store 迁移至 Svelte 5 Runes（theme.ts/history.ts 使用 writable） | ⬜ | P2 | 现代化 | [`theme.ts`](src/lib/stores/theme.ts), [`history.ts`](src/lib/stores/history.ts) |
+| 搜索 Store 解耦重构（拆分为system/plugin/merger独立模块） | ✅ | P1 | 可测试性↑ | [`search/`](src/lib/stores/search/) |
+| `executor` 服务拆分（职责过重，拆为system/setting/plugin） | ✅ | P2 | 可维护性↑ | [`executor/`](src/lib/services/executor/) |
+| Store 迁移至 Svelte 5 Runes（theme.ts/history.ts 使用 writable） | ✅ | P2 | 现代化 | [`theme.svelte.ts`](src/lib/stores/theme.svelte.ts), [`history.svelte.ts`](src/lib/stores/history.svelte.ts) |
 
 ### 长期优化（1-2月）
 
@@ -78,7 +78,7 @@
 | 搜索响应性能优化 | ✅ | P0 | Promise.allSettled 并行搜索 + 拼音缓存，模糊匹配 < 50ms | [`fuzzy.ts`](src/lib/search/fuzzy.ts) |
 | 搜索结果分类展示 | ✅ | P1 | 区分系统/插件/文件/应用，图标+颜色分类 | [`ResultList.svelte`](src/lib/components/ResultList.svelte) |
 | 快捷键设置面板 | ✅ | P1 | ShortcutRecorder 组件可视化修改全局唤起快捷键 | [`SettingPanel.svelte`](src/lib/components/SettingPanel.svelte) |
-| 主题切换实时生效 | 🔄 | P1 | 深色/浅色/跟随系统，待迁移至 Svelte 5 Runes | [`theme.ts`](src/lib/stores/theme.ts), [`themes.css`](src/lib/styles/themes.css) |
+| 主题切换实时生效 | ✅ | P1 | 深色/浅色/跟随系统，已迁移至 Svelte 5 Runes | [`theme.svelte.ts`](src/lib/stores/theme.svelte.ts), [`themes.css`](src/lib/styles/themes.css) |
 | 窗口失焦自动隐藏 | ✅ | P0 | 透明窗口失去焦点后自动隐藏 | [`window_service.rs`](src-tauri/src/services/window_service.rs) |
 
 ### 4. 配置与数据持久化 💾
