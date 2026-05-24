@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::RwLock;
 use rquickjs::{Context, Runtime, Value};
 use std::time::{Instant, SystemTime};
 
@@ -70,29 +70,31 @@ impl VmCore {
 
 /// QuickJS 运行时管理器
 ///
-/// 通过 Mutex 保证线程安全，所有 VM 操作都是序列化的。
+/// 通过 RwLock 保证线程安全：
+/// - 读操作（with_context, active_vm_count, vm_exists, get_vm_stats）使用读锁，可并发执行
+/// - 写操作（create_vm, destroy_vm, execute, cleanup）使用写锁，独占访问
 pub struct QuickJSRuntime {
     config: QuickJSConfig,
-    vm_pool: Mutex<Vec<VmCore>>,
+    vm_pool: RwLock<Vec<VmCore>>,
 }
 
 impl QuickJSRuntime {
     pub fn new() -> Self {
         Self {
             config: QuickJSConfig::default(),
-            vm_pool: Mutex::new(Vec::new()),
+            vm_pool: RwLock::new(Vec::new()),
         }
     }
 
     pub fn with_config(config: QuickJSConfig) -> Self {
         Self {
             config,
-            vm_pool: Mutex::new(Vec::new()),
+            vm_pool: RwLock::new(Vec::new()),
         }
     }
 
     pub fn create_vm(&self) -> Result<String, String> {
-        let mut pool = self.vm_pool.lock().map_err(|e| e.to_string())?;
+        let mut pool = self.vm_pool.write().map_err(|e| e.to_string())?;
 
         if pool.len() >= self.config.max_vm_count {
             return Err(format!(
@@ -109,7 +111,7 @@ impl QuickJSRuntime {
     }
 
     pub fn destroy_vm(&self, vm_id: &str) -> Result<(), String> {
-        let mut pool = self.vm_pool.lock().map_err(|e| e.to_string())?;
+        let mut pool = self.vm_pool.write().map_err(|e| e.to_string())?;
 
         let original_len = pool.len();
         pool.retain(|vm| vm.id != vm_id);
@@ -122,7 +124,7 @@ impl QuickJSRuntime {
     }
 
     pub fn execute(&self, vm_id: &str, code: &str) -> Result<serde_json::Value, String> {
-        let mut pool = self.vm_pool.lock().map_err(|e| e.to_string())?;
+        let mut pool = self.vm_pool.write().map_err(|e| e.to_string())?;
 
         let vm = pool.iter_mut()
             .find(|v| v.id == vm_id)
@@ -139,12 +141,12 @@ impl QuickJSRuntime {
     }
 
     pub fn active_vm_count(&self) -> Result<usize, String> {
-        let pool = self.vm_pool.lock().map_err(|e| e.to_string())?;
+        let pool = self.vm_pool.read().map_err(|e| e.to_string())?;
         Ok(pool.len())
     }
 
     pub fn cleanup(&self) -> Result<usize, String> {
-        let mut pool = self.vm_pool.lock().map_err(|e| e.to_string())?;
+        let mut pool = self.vm_pool.write().map_err(|e| e.to_string())?;
         let original_len = pool.len();
         let timeout_secs = self.config.idle_timeout_secs;
 
@@ -168,7 +170,7 @@ impl QuickJSRuntime {
     }
 
     pub fn cleanup_all(&self) -> Result<usize, String> {
-        let mut pool = self.vm_pool.lock().map_err(|e| e.to_string())?;
+        let mut pool = self.vm_pool.write().map_err(|e| e.to_string())?;
         let removed_count = pool.len();
         pool.clear();
         println!("[QuickJSRuntime] 已强制清理所有 {} 个 VM", removed_count);
@@ -176,7 +178,7 @@ impl QuickJSRuntime {
     }
 
     pub fn get_vm_stats(&self) -> Result<Vec<VmStats>, String> {
-        let pool = self.vm_pool.lock().map_err(|e| e.to_string())?;
+        let pool = self.vm_pool.read().map_err(|e| e.to_string())?;
         Ok(pool.iter()
             .map(|vm| VmStats {
                 id: vm.id.clone(),
@@ -188,7 +190,7 @@ impl QuickJSRuntime {
     }
 
     pub fn vm_exists(&self, vm_id: &str) -> Result<bool, String> {
-        self.vm_pool.lock()
+        self.vm_pool.read()
             .map(|pool| pool.iter().any(|vm| vm.id == vm_id))
             .map_err(|e| e.to_string())
     }
@@ -197,7 +199,7 @@ impl QuickJSRuntime {
     where
         F: FnOnce(rquickjs::Ctx<'_>) -> Result<T, String>,
     {
-        let pool = self.vm_pool.lock().map_err(|e| e.to_string())?;
+        let pool = self.vm_pool.read().map_err(|e| e.to_string())?;
 
         let vm = pool
             .iter()
