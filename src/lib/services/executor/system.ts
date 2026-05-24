@@ -30,8 +30,13 @@ export class SystemExecutor {
   }
 
   async executeCommand(item: ExecutableItem): Promise<ExecutionResult> {
-    console.log('执行命令:', item.target, item.args);
-    return { success: true, message: `已执行命令: ${item.name}` };
+    try {
+      await invoke('open_app', { app: item.target });
+      return { success: true, message: `已执行命令: ${item.name}` };
+    } catch (error) {
+      console.error('命令执行失败:', item.target, error);
+      return { success: false, message: `命令执行失败: ${error}` };
+    }
   }
 }
 

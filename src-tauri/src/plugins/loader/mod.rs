@@ -3,10 +3,9 @@ mod scanner;
 mod lifecycle;
 mod query;
 mod cleanup;
-mod commands;
+pub mod commands;
 
 pub use types::{PluginManifest, PluginInstance, PluginState};
-pub use commands::{scan_plugins, get_plugin_list, load_plugin, unload_plugin, find_plugins_by_prefix, cleanup_idle_plugins, get_plugin_health, plugin_execute};
 
 use std::collections::HashMap;
 use std::path::PathBuf;

@@ -5,13 +5,6 @@ mod error;
 mod plugins;
 mod services;
 
-// 导入配置命令到当前作用域
-use commands::config::{
-    load_system_config, save_system_config,
-    load_user_config, save_user_config, reset_user_config,
-    load_app_config, save_app_config, clear_app_config,
-};
-
 use tauri_plugin_autostart::MacosLauncher;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -22,33 +15,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use services::WindowService;
 
-// 导入 QuickJS 运行时管理器
-use plugins::quickjs_runtime::{
-    QuickJSRuntime, quickjs_create_vm, quickjs_destroy_vm, quickjs_execute,
-    quickjs_active_count, quickjs_cleanup, quickjs_cleanup_all, quickjs_vm_stats,
-};
-
-// 导入 API 桥接层
-use plugins::api_bridge::inject_apis_to_vm;
-
-// 导入插件加载器
-use plugins::loader::{
-    PluginLoader, scan_plugins, get_plugin_list, load_plugin, unload_plugin,
-    find_plugins_by_prefix, cleanup_idle_plugins, get_plugin_health, plugin_execute,
-};
-
-// 导入插件注册表
-use plugins::registry::{
-    PluginRegistry, search_plugins_by_prefix,
-    get_active_plugins, get_plugin_state,
-};
-
-// 导入 WASM 桥接层
-use plugins::wasm_bridge::{
-    WasmBridge, wasm_register_functions, wasm_unregister_patch,
-    wasm_list_functions, wasm_is_patch_loaded, wasm_call_function,
-    wasm_store_call_result, wasm_get_call_result,
-};
+use plugins::quickjs_runtime::QuickJSRuntime;
+use plugins::loader::PluginLoader;
+use plugins::registry::PluginRegistry;
+use plugins::wasm_bridge::WasmBridge;
 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -128,61 +98,26 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            // QuickJS 运行时管理（VM 池化）
-            quickjs_create_vm,
-            quickjs_destroy_vm,
-            quickjs_execute,
-            quickjs_active_count,
-            quickjs_cleanup,
-            quickjs_cleanup_all,
-            quickjs_vm_stats,
-            // API 注入
-            inject_apis_to_vm,
-            // WASM 桥接
-            wasm_register_functions,
-            wasm_unregister_patch,
-            wasm_list_functions,
-            wasm_is_patch_loaded,
-            wasm_call_function,
-            wasm_store_call_result,
-            wasm_get_call_result,
-            // 插件加载器管理
-            scan_plugins,
-            get_plugin_list,
-            load_plugin,
-            unload_plugin,
-            find_plugins_by_prefix,
-            cleanup_idle_plugins,
-            get_plugin_health,
-            plugin_execute,
-            // 插件注册表查询
-            search_plugins_by_prefix,
-            get_active_plugins,
-            get_plugin_state,
-            // 窗口管理
+.invoke_handler(tauri::generate_handler![
+            // 窗口
+            commands::window::toggle_window,
             commands::window::show_window,
             commands::window::hide_window,
-            commands::window::toggle_window,
             commands::window::set_always_on_top,
             commands::window::check_window_visible,
-            // 剪贴板
-            commands::clipboard::read_clipboard,
-            commands::clipboard::write_clipboard,
-            // Shell 操作
+            // Shell
             commands::shell::open_url,
             commands::shell::open_path,
             commands::shell::open_app,
-            // 配置管理 (分层配置)
-            load_system_config,
-            save_system_config,
-            load_user_config,
-            save_user_config,
-            reset_user_config,
-            load_app_config,
-            save_app_config,
-            clear_app_config,
-            // 数据存储 (兼容旧 API)
+            // 剪贴板
+            commands::clipboard::read_clipboard,
+            commands::clipboard::write_clipboard,
+            // 快捷键
+            commands::shortcut::register_shortcut_cmd,
+            commands::shortcut::register_custom_shortcut,
+            commands::shortcut::unregister_all_shortcuts,
+            commands::shortcut::get_current_shortcut,
+            // 存储
             commands::store::save_to_store,
             commands::store::load_from_store,
             commands::store::delete_from_store,
@@ -190,18 +125,51 @@ pub fn run() {
             commands::autostart::enable_autostart,
             commands::autostart::disable_autostart,
             commands::autostart::is_autostart_enabled,
-            // 全局快捷键
-            commands::shortcut::register_shortcut_cmd,
-            commands::shortcut::register_custom_shortcut,
-            commands::shortcut::unregister_all_shortcuts,
-            commands::shortcut::get_current_shortcut,
-            // 插件数据隔离存储
+            // 配置（使用三级路径：子模块定义位置）
+            commands::config::system::load_system_config,
+            commands::config::system::save_system_config,
+            commands::config::user::load_user_config,
+            commands::config::user::save_user_config,
+            commands::config::user::reset_user_config,
+            commands::config::app::load_app_config,
+            commands::config::app::save_app_config,
+            commands::config::app::clear_app_config,
+            // 插件数据存储
             commands::plugin::get_plugin_data_path,
             commands::plugin::read_plugin_data,
             commands::plugin::write_plugin_data,
             commands::plugin::delete_plugin_data,
             commands::plugin::clear_plugin_data,
             commands::plugin::get_plugin_data_size,
+            // 插件生命周期管理（定义在 plugins::loader::commands）
+            plugins::loader::commands::scan_plugins,
+            plugins::loader::commands::get_plugin_list,
+            plugins::loader::commands::load_plugin,
+            plugins::loader::commands::unload_plugin,
+            plugins::loader::commands::find_plugins_by_prefix,
+            plugins::loader::commands::cleanup_idle_plugins,
+            plugins::loader::commands::get_plugin_health,
+            plugins::loader::commands::plugin_execute,
+            // 插件注册表
+            plugins::registry::search_plugins_by_prefix,
+            plugins::registry::get_active_plugins,
+            plugins::registry::get_plugin_state,
+            // WASM 桥接
+            plugins::wasm_bridge::wasm_register_functions,
+            plugins::wasm_bridge::wasm_unregister_patch,
+            plugins::wasm_bridge::wasm_list_functions,
+            plugins::wasm_bridge::wasm_is_patch_loaded,
+            plugins::wasm_bridge::wasm_call_function,
+            plugins::wasm_bridge::wasm_store_call_result,
+            plugins::wasm_bridge::wasm_get_call_result,
+            // QuickJS 运行时
+            plugins::quickjs_runtime::quickjs_create_vm,
+            plugins::quickjs_runtime::quickjs_destroy_vm,
+            plugins::quickjs_runtime::quickjs_execute,
+            plugins::quickjs_runtime::quickjs_active_count,
+            plugins::quickjs_runtime::quickjs_cleanup,
+            plugins::quickjs_runtime::quickjs_cleanup_all,
+            plugins::quickjs_runtime::quickjs_vm_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

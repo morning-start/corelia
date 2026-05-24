@@ -290,12 +290,28 @@ class PluginService {
    * @returns 活跃 VM 数量和空 entries（前端不再缓存 VM）
    */
   async getCacheStatus(): Promise<{ size: number; entries: Array<{ pluginId: string; vmId: string; lastUsed: number }> }> {
-    // 前端不再缓存 VM，返回空状态
-    // TODO: 可调用后端 get_plugin_health 获取真实的后端状态
-    return {
-      size: 0,
-      entries: []
-    };
+    try {
+      const health = await invoke<Array<{
+        id: string;
+        state: string;
+        vm_id: string | null;
+        loaded_at: number | null;
+        last_used: number | null;
+      }>>('get_plugin_health');
+
+      const entries = health
+        .filter(h => h.vm_id != null)
+        .map(h => ({
+          pluginId: h.id,
+          vmId: h.vm_id!,
+          lastUsed: h.last_used != null ? Date.now() - h.last_used * 1000 : Date.now(),
+        }));
+
+      return { size: entries.length, entries };
+    } catch (e) {
+      console.warn('[PluginService] 获取插件健康状态失败:', e);
+      return { size: 0, entries: [] };
+    }
   }
 }
 
