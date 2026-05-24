@@ -32,7 +32,8 @@ impl Default for QuickJSConfig {
 ///   2. 所有访问都是序列化的，不会出现并发
 struct VmCore {
     pub id: String,
-    runtime: Runtime,
+    /// rquickjs Runtime 必须保持存活以确保 Context 有效
+    _runtime: Runtime,
     context: Context,
     created_at: Instant,
     last_used_at: Instant,
@@ -51,7 +52,7 @@ impl VmCore {
         let now = Instant::now();
         Ok(Self {
             id,
-            runtime,
+            _runtime: runtime,
             context,
             created_at: now,
             last_used_at: now,
@@ -186,10 +187,10 @@ impl QuickJSRuntime {
             .collect())
     }
 
-    pub fn vm_exists(&self, vm_id: &str) -> bool {
+    pub fn vm_exists(&self, vm_id: &str) -> Result<bool, String> {
         self.vm_pool.lock()
             .map(|pool| pool.iter().any(|vm| vm.id == vm_id))
-            .unwrap_or(false)
+            .map_err(|e| e.to_string())
     }
 
     pub fn with_context<T, F>(&self, vm_id: &str, operation: F) -> Result<T, String>

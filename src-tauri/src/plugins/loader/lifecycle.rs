@@ -92,7 +92,9 @@ pub fn load_plugin(loader: &mut super::PluginLoader, id: &str) -> Result<(Plugin
     if let Err(e) = loader.quickjs_runtime.with_context(&vm_id, |ctx| {
         crate::plugins::api_bridge::ApiBridge::inject_utools(&ctx, id)
     }) {
-        let _ = loader.quickjs_runtime.destroy_vm(&vm_id);
+        if let Err(e) = loader.quickjs_runtime.destroy_vm(&vm_id) {
+            eprintln!("[PluginLoader] ⚠️ 销毁 VM 失败 (API 注入失败): {}", e);
+        }
         let instance = loader.instances.get_mut(id).unwrap();
         instance.vm_id = None;
         instance.state = PluginState::Error(format!("API 注入失败: {}", e));
@@ -113,8 +115,9 @@ pub fn load_plugin(loader: &mut super::PluginLoader, id: &str) -> Result<(Plugin
     }
 
     // Phase 6: 执行插件代码 + 更新状态
+    let execute_result = loader.quickjs_runtime.execute(&vm_id, &code);
     {
-        match loader.quickjs_runtime.execute(&vm_id, &code) {
+        match execute_result {
             Ok(_) => {
                 let instance = loader.instances.get_mut(id).unwrap();
                 instance.state = PluginState::Ready;
@@ -128,7 +131,9 @@ pub fn load_plugin(loader: &mut super::PluginLoader, id: &str) -> Result<(Plugin
                 Ok((instance.state.clone(), Some(vm_id.to_string())))
             }
             Err(e) => {
-                let _ = loader.quickjs_runtime.destroy_vm(&vm_id);
+                if let Err(destroy_err) = loader.quickjs_runtime.destroy_vm(&vm_id) {
+                    eprintln!("[PluginLoader] ⚠️ 销毁 VM 失败 (执行失败): {}", destroy_err);
+                }
                 let instance = loader.instances.get_mut(id).unwrap();
                 instance.vm_id = None;
                 let error_msg = format!("执行插件代码失败: {}", e);
@@ -232,7 +237,9 @@ impl super::PluginLoader {
         }
 
         if let Some(app) = crate::plugins::api_bridge::get_app_handle() {
-            let _ = app.emit("plugin-out", id.to_string());
+            if let Err(e) = app.emit("plugin-out", id.to_string()) {
+                eprintln!("[PluginLoader] ⚠️ 发送 plugin-out 事件失败: {}", e);
+            }
         }
 
         if let Some(ref vm_id) = instance.vm_id {
