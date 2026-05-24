@@ -94,7 +94,7 @@
 
 | 任务 | 状态 | 优先级 | 说明 | 关联路径 |
 |------|:----:|:------:|------|----------|
-| Rust 单元测试覆盖核心模块 | ⬜ | P1 | `registry.rs` / `wasm_bridge.rs` 等 | `src-tauri/src/` |
+| Rust 单元测试覆盖核心模块 | ✅ | P1 | `registry.rs`（28 个测试：注册/注销/查询/状态机/前缀搜索/生命周期） | `src-tauri/src/plugins/registry.rs` |
 | 前端类型检查无错误 | ✅ | P0 | `bun run check` —— 0 errors, 0 warnings | 全局 |
 | Rust 编译无警告 | ✅ | P0 | `cargo check` clean | `src-tauri/` |
 | 插件加载流程 E2E 验证 | ⬜ | P1 | 手动验证：扫描 → 加载 → 执行 → 卸载 | 全局 |
@@ -138,6 +138,7 @@
 ### 质量
 - ✅ `bun run check` —— 0 errors, 0 warnings
 - ✅ `cargo check` —— 零警告通过
+- ✅ `registry.rs` 单元测试 —— 28 个测试覆盖注册/注销/查询/前缀搜索/状态机/生命周期
 
 </details>
 
@@ -156,8 +157,9 @@
 
 ## 下一步行动（本周）
 
-1. **补充** `registry.rs` 核心函数的单元测试
+1. ✅ ~~补充 `registry.rs` 核心函数的单元测试~~（已完成：28 个测试全部通过）
 2. **启动** `plugins/mod.rs` 模块化整理（统一 api_bridge/loader 的模块导出模式）
+3. **启动** 插件热重载实现（监听 plugins/ 目录变化）
 
 ---
 
