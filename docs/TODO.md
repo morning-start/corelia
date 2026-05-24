@@ -16,7 +16,7 @@
 | 任务 | 状态 | 优先级 | 影响 | 关联文件 |
 |------|:----:|:------:|:----:|----------|
 | `api_bridge.rs` 模块化拆分（已拆分为 15 个子模块：shared/storage/clipboard/shell/window/path/notification/fs/callbacks/fetch/dialog/process/context/wasm + mod.rs） | ✅ | P0 | 可维护性↑ | [`api_bridge/`](src-tauri/src/plugins/api_bridge/) |
-| `loader.rs` 模块化拆分（当前 37KB，拆分为7个子模块） | ⬜ | P1 | 可维护性↑ | [`loader.rs`](src-tauri/src/plugins/loader.rs) |
+| `loader.rs` 模块化拆分（已拆分为 7 个子模块：types/scanner/lifecycle/query/cleanup/commands + mod.rs） | ✅ | P1 | 可维护性↑ | [`loader/`](src-tauri/src/plugins/loader/) |
 | 搜索 Store 解耦重构（拆分为system/plugin/merger独立模块） | ⬜ | P1 | 可测试性↑ | [`search.ts`](src/lib/stores/search.ts) |
 | `executor` 服务拆分（职责过重，拆为system/setting/plugin） | ⬜ | P2 | 可维护性↑ | [`executor.ts`](src/lib/services/executor.ts) |
 | Store 迁移至 Svelte 5 Runes（theme.ts/history.ts 使用 writable） | ⬜ | P2 | 现代化 | [`theme.ts`](src/lib/stores/theme.ts), [`history.ts`](src/lib/stores/history.ts) |
@@ -150,17 +150,16 @@
 | `rquickjs` 异步支持不足 | 中 | 观察中 | WASM 结果轮询方案已落地，后续关注版本更新 |
 | 插件内存泄漏（VM 未释放）| 低 | 已缓解 | VM 闲置超时自动清理已实现，cleanup_idle_plugins() 定期触发 |
 | macOS 平台测试缺失 | 低 | 可接受 | MVP 阶段聚焦 Windows，Beta 阶段再适配 |
-| 大型文件模块化拆分风险 | 低 | 已缓解 | `api_bridge.rs`（44.4KB）已拆分 ✅，`loader.rs`（37KB）待处理 |
+| 大型文件模块化拆分风险 | 低 | 已缓解 | `api_bridge.rs`（44.4KB）已拆分 ✅，`loader.rs`（37KB）已拆分 ✅ |
 
 ---
 
 ## 下一步行动（本周）
 
-1. **启动** `loader.rs` 模块化拆分（P1，37KB 需要分拆为7个子模块）
-2. **实现** 配置重置功能（`user.ts` 一键恢复默认值）
-3. **开始** QuickJS `unsafe impl Send/Sync` 移除方案设计
-4. **补充** `registry.rs` 核心函数的单元测试
-5. **跟进** `api_bridge/` 子模块的进一步文档化（各模块职责说明）
+1. **实现** 配置重置功能（`user.ts` 一键恢复默认值）
+2. **开始** QuickJS `unsafe impl Send/Sync` 移除方案设计
+3. **补充** `registry.rs` 核心函数的单元测试
+4. **启动** `plugins/mod.rs` 模块化整理（统一 api_bridge/loader 的模块导出模式）
 
 ---
 
