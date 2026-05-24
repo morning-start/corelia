@@ -20,9 +20,13 @@ class ResultExecutor {
   setting = new SettingExecutor();
   plugin = new PluginExecutor();
   private appWindow = getCurrentWindow();
+  private executing = false;
 
   async execute(item: ExecutableItem): Promise<ExecutionResult> {
+    if (this.executing) return { success: false, message: '正在执行中...' };
+
     try {
+      this.executing = true;
       await this.recordToHistory(item);
 
       const result = await this.executeByType(item);
@@ -31,6 +35,8 @@ class ResultExecutor {
     } catch (error) {
       console.error('执行失败:', error);
       return { success: false, message: String(error) };
+    } finally {
+      this.executing = false;
     }
   }
 

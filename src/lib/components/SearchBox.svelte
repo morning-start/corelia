@@ -11,13 +11,19 @@
 
   let { value = $bindable(''), placeholder = '搜索应用、命令或文件...', onInput }: Props = $props();
 
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
   /**
-   * 处理输入事件
+   * 处理输入事件（150ms 防抖，仅回调防抖，值立即更新以保持 UI 响应）
    */
   function handleInput(event: Event) {
     const target = event.target as HTMLInputElement;
     value = target.value;
-    onInput?.(value);
+
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      onInput?.(value);
+    }, 150);
   }
 
   /**
@@ -25,6 +31,7 @@
    */
   function clearInput() {
     value = '';
+    if (debounceTimer) clearTimeout(debounceTimer);
     onInput?.('');
   }
 </script>

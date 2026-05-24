@@ -1,17 +1,4 @@
 // WASM 桥接模块
-// 负责：管理 WASM patch 的注册/查找/调用，实现 QuickJS VM ↔ WebView WASM 的 IPC 桥接
-//
-// 架构：
-// QuickJS VM (rquickjs) ──invoke──→ Rust wasm_bridge ──emit event──→ WebView (WebAssembly)
-//                                     ↑                                      │
-//                                     └─────────── listen event ──────────────┘
-//
-// 流程：
-// 1. Rust 读取 patches 列表 → 通知前端加载 WASM
-// 2. 前端在 WebView 中初始化 WebAssembly → 注册可用函数到 Rust
-// 3. QuickJS VM 调用 __wasm_call(name, args) → Rust 转发到前端 → 返回结果
-
-#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
