@@ -28,7 +28,7 @@ struct RegistryData {
 /// - 写操作（注册/注销/更新状态）独占访问
 ///
 /// # Example
-/// ```rust
+/// ```ignore
 /// let registry = PluginRegistry::new();
 /// registry.register(instance)?;
 /// let plugins = registry.search_by_prefix("hw");
@@ -172,11 +172,11 @@ impl PluginRegistry {
     /// 匹配到的插件列表（已去重）
     ///
     /// # Example
-    /// ```rust
-    /// // 假设有插件 prefix 为 "hw"
-    /// let results = registry.search_by_prefix("h");      // 匹配到 hello-world
-    /// let results = registry.search_by_prefix("helloworld"); // 也匹配到 hello-world
-    /// ```
+/// ```ignore
+/// // 假设有插件 prefix 为 "hw"
+/// let results = registry.search_by_prefix("h");      // 匹配到 hello-world
+/// let results = registry.search_by_prefix("helloworld"); // 也匹配到 hello-world
+/// ```
     pub fn search_by_prefix(&self, query: &str) -> Vec<PluginInstance> {
         let data = match self.inner.read() {
             Ok(d) => d,
@@ -247,10 +247,10 @@ impl PluginRegistry {
     /// - `Err(String)`: 错误信息（如插件不存在、非法状态转换等）
     ///
     /// # State Machine
-    /// ```
-    /// MetaLoaded ──→ Loading ──→ Ready/Cached/Error
-    ///     ↑                      │
-    ///     └──────── Unloaded ←───┘
+    /// ```text
+    /// MetaLoaded --> Loading --> Ready/Cached/Error
+    ///     ^                          |
+    ///     +---------- Unloaded <-----+
     /// ```
     pub fn update_state(&self, id: &str, new_state: PluginState) -> Result<(), String> {
         let mut data = self.inner.write().map_err(|e| e.to_string())?;

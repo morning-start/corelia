@@ -218,14 +218,16 @@ pub struct VmStats {
 
 /// 生成唯一的 VM ID
 ///
-/// 格式：`vm_{timestamp}_{random}`
+/// 格式：`vm_{timestamp}_{counter}`
+/// 使用单调计数器作为后备，确保系统时间异常时仍能生成唯一 ID
 fn generate_vm_id() -> String {
+    static VM_ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let counter = VM_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
-    let random: u32 = rand::random();
-    format!("vm_{}_{}", timestamp, random)
+    format!("vm_{}_{}", timestamp, counter)
 }
 
 // ==================== Tauri Commands ====================

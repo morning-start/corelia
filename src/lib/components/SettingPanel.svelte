@@ -27,11 +27,18 @@
   let startupEnabled = $state(false);
 
   onMount(async () => {
-    // 加载系统配置和用户配置
-    await Promise.all([
+    // 分别加载系统配置和用户配置，单个失败不阻塞另一个
+    const [systemResult, userResult] = await Promise.allSettled([
       system.load(),
       user.load()
     ]);
+
+    if (systemResult.status === 'rejected') {
+      console.error('Failed to load system config:', systemResult.reason);
+    }
+    if (userResult.status === 'rejected') {
+      console.error('Failed to load user config:', userResult.reason);
+    }
 
     // 获取开机自启动状态
     try {
