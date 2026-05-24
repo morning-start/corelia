@@ -88,7 +88,7 @@
 | 三层配置系统对接前端 | ✅ | P0 | System / User / App 配置可读写，前端已接入 | [`config/`](src-tauri/src/commands/config/) |
 | 插件数据隔离存储 | ✅ | P0 | 每个插件独立的 `dbStorage` 空间，api.store 命名空间隔离 | [`api_bridge.rs`](src-tauri/src/plugins/api_bridge.rs) |
 | 搜索历史持久化 | ✅ | P1 | 历史记录通过 api.store 保存到 App Config | [`history.ts`](src/lib/stores/history.ts) |
-| 配置重置功能 | ⬜ | P2 | User Config 可一键恢复默认值 | [`user.ts`](src/lib/stores/user.ts) |
+| 配置重置功能 | ✅ | P2 | User Config 可一键恢复默认值（设置面板「通用」→「重置」按钮 + 确认弹窗） | [`user.ts`](src/lib/stores/user.ts), [`SettingPanel.svelte`](src/lib/components/SettingPanel.svelte) |
 
 ### 5. 测试与质量 ✅
 
