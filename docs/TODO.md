@@ -3,7 +3,7 @@
 > 本文档聚焦于 **MVP 核心框架阶段**（阶段一）的当前任务。
 > 更新频率：每周评审，任务完成后归档。
 >
-> 另有架构优化报告见 [`analysis/ARCHITECTURE_OPTIMIZATION_REPORT.md`](analysis/ARCHITECTURE_OPTIMIZATION_REPORT.md)
+> 另有架构优化报告见 [`report/ARCHITECTURE_OPTIMIZATION_REPORT.md`](./report/ARCHITECTURE_OPTIMIZATION_REPORT.md)
 
 ---
 

@@ -262,3 +262,44 @@ QuickJS VM (插件代码)
 4. **轮询式结果获取** — QuickJS 同步执行模型下，`__wasm_get_result` 轮询获取异步结果
 5. **分层配置** — 系统配置 / 用户配置 / 应用配置三层分离
 6. **透明窗口** — `decorations: false, transparent: true`，手动处理焦点管理
+
+## 设计权衡与注意事项
+
+### QuickJS 的局限性
+
+当前 QuickJS 运行时基于 `rquickjs`，其底层 `RefCell` 架构限制了跨线程访问：
+- 所有 VM 操作必须在主线程执行
+- `unsafe impl Send/Sync` 用于通过编译器检查，需确保不跨线程使用
+- 多线程 VM 支持需等待 `rquickjs` 上游更新或自建线程隔离层
+
+### WASM 结果轮询 vs Promise 模式
+
+当前 WASM 桥接使用同步轮询（`__wasm_call` → `__wasm_get_result`），效率低于 Promise 异步模式：
+- **短期**：轮询退避策略（10ms → 指数增长 → 100ms）可缓解 CPU 浪费
+- **长期**：跟踪 `rquickjs` 的 Promise 支持，待成熟后迁移
+
+### IPC 延迟与搜索感知
+
+Tauri 的 Command 调用为异步 IPC，每次 invoke 增加 ~0.5-1ms 延迟。搜索场景（每次按键多插件并发搜索）下累积延迟可能达到 10-20ms。
+- 推荐使用 `Promise.allSettled` 并行化插件搜索
+- 拼音转换结果建议预缓存，避免每次按键重复计算
+
+### sled 存储注意事项
+
+项目使用 sled 作为嵌入式 KV 存储，以下场景需注意：
+- **写放大**：高频写入场景（剪贴板历史、同步引擎）sled 写放大可达 10-50x 于 LMDB
+- **批量写入**：高频场景使用批量 flush（每 5 秒），避免每次写入立即刷盘
+- **压缩**：附件（图片等）存储使用原始二进制，避免 JSON base64 膨胀
+
+### ZTools/Rubick 参考分析中的关键教训
+
+参考 [ZTools 关键矛盾分析](../reference/ZTools/KEY_ISSUES_SUPPLEMENT.md) 中的跨文档交叉分析：
+
+| 教训 | 来源 | Corelia 应对 |
+|------|------|-------------|
+| 权限检查不可跳过 | ZTools 的 TODO 遗留（全部返回 true） | 插件 API 必须经过 Tauri capabilities + 运行时权限校验 |
+| 窗口 API 不宜过度膨胀 | ZTools 165 窗口方法可压缩到 6 个 | Corelia 保持 `WindowBuilder` + `WindowRegistry` 统一接口 |
+| 插件崩溃必须隔离 | ZTools 无恢复策略 | 设计自动恢复 + 异常隔离（单插件不影响主进程） |
+| 迁移时间线需保守 | ZTools 分析揭示 5-7 周实际需 8-12 周 | 时间规划预留 50% buffer |
+
+> 完整参考分析见 [`reference/ZTools/`](../reference/ZTools/) 和 [`reference/Rubick/`](../reference/Rubick/)。

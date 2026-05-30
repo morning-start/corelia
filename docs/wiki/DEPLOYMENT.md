@@ -89,5 +89,9 @@ bun install
 |------|------|------|
 | 窗口不透明 | 主题 CSS 未设置 transparent | 检查 `body { background: transparent }` |
 | 快捷键不响应 | 权限未声明 | 检查 `capabilities/default.json` |
+| 注册快捷键冲突 | 前次注册未清理 | `unregister_all()` 在 setup 中先执行 |
 | 插件加载失败 | plugin.json 格式错误 | 检查 JSON 语法和必填字段 |
 | WASM 加载失败 | 文件路径不正确 | 检查 patches 目录结构和文件名 |
+| 插件崩溃后主窗口卡死 | 插件 Webview 异常 | 单个插件应被 VM 隔离，不影响主进程；如复现，检查插件 CPU 死循环 |
+| 存储写入异常 | 磁盘空间不足或权限 | 检查 `app_data_dir` 写入权限；sled 数据库损坏时删除 `plugins_data/` 目录 |
+| 透明窗口失焦不隐藏 | autoHide 配置或事件监听 | 检查 `window_service.rs` 的 `onFocusChanged` 监听是否注册 |

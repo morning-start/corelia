@@ -18,7 +18,15 @@
 |------|------|
 | [TODO.md](TODO.md) | 当前 MVP 阶段任务清单 |
 | [ROADMAP.md](ROADMAP.md) | 长期路线图与里程碑 |
-| [analysis/ARCHITECTURE_OPTIMIZATION_REPORT.md](analysis/ARCHITECTURE_OPTIMIZATION_REPORT.md) | 架构优化分析（快照，2026-04-29） |
+| [report/ARCHITECTURE_OPTIMIZATION_REPORT.md](report/ARCHITECTURE_OPTIMIZATION_REPORT.md) | 架构优化分析（快照，2026-04-29） |
+
+## 参考分析
+
+| 文档 | 说明 |
+|------|------|
+| [ZTools 架构分析](reference/ZTools/ANALYSIS_REPORT.md) | Electron 38 + Vue 3 参考实现全面分析（11 份文档） |
+| [Rubick 架构分析](reference/Rubick/ANALYSIS_REPORT.md) | Electron 26 + Vue 3 启动器对照分析（8 份文档） |
+| [ZTools 关键矛盾与设计决策](reference/ZTools/KEY_ISSUES_SUPPLEMENT.md) | 跨文档交叉分析：安全 vs 功能、IPC 膨胀、平台兼容性等 20+ 设计张力 |
 
 ## 快速导航
 

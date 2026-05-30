@@ -23,6 +23,12 @@ bun run tauri dev
 # 类型检查
 bun run check
 
+# Rust 编译检查
+cargo check
+
+# Rust 单元测试
+cargo test
+
 # 生产构建
 bun run tauri build
 ```
@@ -160,7 +166,7 @@ RUST_LOG=corelia::plugins=debug bun run tauri dev
 - 使用浏览器 DevTools（右键 → 检查元素）
 - `console.log` 输出可在 DevTools Console 查看
 
-### 类型检查
+### 类型检查与测试
 
 ```bash
 # 前端类型检查
@@ -168,7 +174,16 @@ bun run check
 
 # Rust 编译检查
 cd src-tauri && cargo check
+
+# Rust 单元测试（当前覆盖：registry.rs 28 个测试）
+cd src-tauri && cargo test
+
+# 持续监控测试
+cargo watch -x test
 ```
+
+> 当前 Rust 测试覆盖插件注册表核心逻辑（状态机、双重索引、前缀搜索）。
+> 更多模块的测试覆盖将在后续迭代中补充。
 
 ## 常见问题
 
@@ -235,7 +250,19 @@ appWindow.onFocusChanged(async ({ payload: focused }) => {
 
 ### 7. 快捷键选择
 
-避免 `Alt+Space`（系统保留），推荐 `Ctrl+Space`。
+避免 `Alt+Space`（系统保留，与窗口菜单冲突），推荐 `Ctrl+Space`。
+
+### 8. 插件崩溃调试
+
+插件崩溃后状态变为 `Error`，系统会指数退避自动重试（1s → 30s max）。如果插件持续崩溃：
+
+```bash
+# 1. 启用 Rust 日志观察崩溃原因
+RUST_LOG=debug bun run tauri dev
+
+# 2. 在终端中查找 plugin_id + error 信息
+# 3. 修复代码后手动重载（插件管理器 → 重载按钮）
+```
 
 ## 构建与清理
 
